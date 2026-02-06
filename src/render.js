@@ -76,10 +76,14 @@ function renderStringLines({labelZh,labelEn,docUrl,value,placeholder,onChange,on
   return wrapField(
     fieldLabelHtml(labelZh,labelEn,docUrl),
     `<textarea data-path="${U.escapeAttr(dataPath||"")}" placeholder="${U.escapeAttr(placeholder||"每行一条")}">${U.escapeHtml(text)}</textarea>`,
-    (root)=> root.querySelector("textarea").addEventListener("input", e => {
-      const lines = e.target.value.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
-      onChange(lines.length ? lines : undefined);
-    }),
+    (root)=>{
+      const el = root.querySelector("textarea");
+      el.addEventListener("input", e => {
+        const lines = e.target.value.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+        onChange(lines.length ? lines : undefined);
+      });
+      if (onBlur) el.addEventListener("blur", () => onBlur());
+    },
     errText
   );
 }
@@ -164,13 +168,13 @@ function renderJsonBox({labelZh,labelEn,docUrl,value,onInput,onBlur=null,errText
       };
 
       if (field.type === "string") {
-        nodes.push(renderText({ labelZh, labelEn, docUrl, value: curVal, placeholder: field.placeholder || "", onInput: (v) => commit(v), errText, dataPath }));
+        nodes.push(renderText({ labelZh, labelEn, docUrl, value: curVal, placeholder: field.placeholder || "", onInput: (v) => commit(v), onBlur: () => onUIRefresh && onUIRefresh(), errText, dataPath }));
       } else if (field.type === "number") {
         nodes.push(renderNumber({ labelZh, labelEn, docUrl, value: curVal, placeholder: field.placeholder || "", onInput: (v) => commit(v), onBlur: () => onUIRefresh && onUIRefresh(), errText, dataPath }));
       } else if (field.type === "bool") {
         nodes.push(renderBool({ labelZh, labelEn, docUrl, value: !!curVal, onChange: (v) => { commit(v); if (onUIRefresh) onUIRefresh(); }, errText, dataPath }));
       } else if (field.type === "select") {
-        nodes.push(renderSelect({ labelZh, labelEn, docUrl, value: (curVal ?? field.defaultValue), options: field.options || [], onChange: (v) => commit(v), errText, dataPath }));
+        nodes.push(renderSelect({ labelZh, labelEn, docUrl, value: (curVal ?? field.defaultValue), options: field.options || [], onChange: (v) => { commit(v); if (onUIRefresh) onUIRefresh(); }, errText, dataPath }));
       } else if (field.type === "string_lines") {
         nodes.push(renderStringLines({ labelZh, labelEn, docUrl, value: curVal, placeholder: field.placeholder || "每行一条", onChange: (arr) => commit(arr), onBlur: () => onUIRefresh && onUIRefresh(), errText, dataPath }));
       } else if (field.type === "object") {
@@ -180,6 +184,7 @@ function renderJsonBox({labelZh,labelEn,docUrl,value,onInput,onBlur=null,errText
           obj: child,
           rootObj,
           onChange,
+          onUIRefresh,
           fileId,
           pathPrefix: fullPath,
           errorMap
@@ -196,6 +201,7 @@ function renderJsonBox({labelZh,labelEn,docUrl,value,onInput,onBlur=null,errText
         const addBtn = button("+ 添加", "btn small primary", () => {
           arr.push(U.deepClone((S.getSchema(field.ref)?.itemExample) || {}));
           onChange();
+          if (onUIRefresh) onUIRefresh();
         });
 
         const list = document.createElement("div");
@@ -207,15 +213,16 @@ function renderJsonBox({labelZh,labelEn,docUrl,value,onInput,onBlur=null,errText
         arr.forEach((it, idx) => {
           if (!U.isPlainObject(it)) arr[idx] = {};
           const actions = [
-            button("上移", "btn small", () => { if (idx > 0) { [arr[idx - 1], arr[idx]] = [arr[idx], arr[idx - 1]]; onChange(); } }),
-            button("下移", "btn small", () => { if (idx < arr.length - 1) { [arr[idx + 1], arr[idx]] = [arr[idx], arr[idx + 1]]; onChange(); } }),
-            button("删除", "btn small danger", () => { arr.splice(idx, 1); onChange(); })
+            button("上移", "btn small", () => { if (idx > 0) { [arr[idx - 1], arr[idx]] = [arr[idx], arr[idx - 1]]; onChange(); if (onUIRefresh) onUIRefresh(); } }),
+            button("下移", "btn small", () => { if (idx < arr.length - 1) { [arr[idx + 1], arr[idx]] = [arr[idx], arr[idx + 1]]; onChange(); if (onUIRefresh) onUIRefresh(); } }),
+            button("删除", "btn small danger", () => { arr.splice(idx, 1); onChange(); if (onUIRefresh) onUIRefresh(); })
           ];
           const body = renderBySchema({
             schemaId: field.ref,
             obj: it,
             rootObj,
             onChange,
+            onUIRefresh,
             fileId,
             pathPrefix: `${fullPath}.${idx}`,
             errorMap

@@ -25,6 +25,7 @@
 
   // modal
   const elModal = document.getElementById("modal");
+  const elModalTitle = document.getElementById("modalTitle");
   const elModalBody = document.getElementById("modalBody");
   const elModalClose = document.getElementById("modalClose");
   const elModalCancel = document.getElementById("modalCancel");
@@ -42,10 +43,19 @@
     elParseText.textContent = "JSON 解析失败";
   }
 
-  function openModal(html, onContinue) {
-    elModalBody.innerHTML = html;
+  function openModal(arg1, onContinue) {
+    // 兼容旧调用：openModal(html, fn)
+    const opt = (arg1 && typeof arg1 === "object")
+      ? arg1
+      : { title: "提示", html: String(arg1 ?? ""), onContinue };
+
+    elModalTitle.textContent = opt.title || "提示";
+    elModalBody.innerHTML = opt.html || "";
+    elModalContinue.textContent = opt.continueText || "继续";
+    elModalContinue.className = opt.continueClass || "btn primary";
+
     elModal.classList.remove("hidden");
-    lastDownloadAction = onContinue || null;
+    lastDownloadAction = opt.onContinue || null;
   }
   function closeModal() {
     elModal.classList.add("hidden");
@@ -430,17 +440,7 @@ it.querySelector("[data-open]").addEventListener("click", () => {
 
     // log
     obj.log = obj.log || { loglevel: "warning" };
-    root.appendChild(R.renderCard("日志（log）",
-      R.renderFormGrid([
-        R.renderSelect({
-          labelZh: "日志级别", labelEn: "loglevel", docUrl: "https://xtls.github.io/config/log.html",
-          dataPath: `${file.id}:log.loglevel`,
-          value: obj.log.loglevel ?? "warning",
-          options: [{ v: "debug" }, { v: "info" }, { v: "warning" }, { v: "error" }, { v: "none" }].map(x => ({ v: x.v, zh: x.v })),
-          onChange: (v) => { obj.log.loglevel = v; syncJsonFromObj(file); renderPreserveUI(); }
-        })
-      ])
-    ));
+    root.appendChild(renderLogCard({ file, log: obj.log, errorMap, pathPrefix: "log" }));
     root.appendChild(divider());
 
     // inbounds
@@ -452,6 +452,11 @@ it.querySelector("[data-open]").addEventListener("click", () => {
     // outbounds
     obj.outbounds = obj.outbounds || [];
     root.appendChild(renderOutboundsBlock({ file, list: obj.outbounds, errorMap, pathPrefix: "outbounds" }));
+    root.appendChild(divider());
+
+    // dns
+    obj.dns = obj.dns || {};
+    root.appendChild(renderDnsCard({ file, dns: obj.dns, errorMap, pathPrefix: "dns" }));
     root.appendChild(divider());
 
     // routing
@@ -472,50 +477,13 @@ it.querySelector("[data-open]").addEventListener("click", () => {
 
     if (file.part === "log") {
       const log = U.ensureByPath(file.obj, "log", { loglevel: "warning" });
-      root.appendChild(R.renderCard("日志（log）", R.renderFormGrid([
-        R.renderSelect({
-          labelZh: "日志级别", labelEn: "loglevel", docUrl: "https://xtls.github.io/config/log.html",
-          dataPath: `${file.id}:log.loglevel`,
-          value: log.loglevel ?? "warning",
-          options: [{ v: "debug" }, { v: "info" }, { v: "warning" }, { v: "error" }, { v: "none" }].map(x => ({ v: x.v, zh: x.v })),
-          onChange: (v) => { log.loglevel = v; syncJsonFromObj(file); renderPreserveUI(); }
-        })
-      ])));
+      root.appendChild(renderLogCard({ file, log, errorMap, pathPrefix: "log" }));
       return root;
     }
 
     if (file.part === "dns") {
       const dns = U.ensureByPath(file.obj, "dns", {});
-      // 先给最小可用字段 + JSON 兜底（dns 字段很多，后续可按 schema 继续扩）
-      root.appendChild(R.renderCard("DNS（dns）", R.renderFormGrid([
-        R.renderText({
-          labelZh: "查询策略", labelEn: "queryStrategy",
-          docUrl: "https://xtls.github.io/config/dns.html",
-          dataPath: `${file.id}:dns.queryStrategy`,
-          value: dns.queryStrategy ?? "",
-          placeholder: "如 UseIP / UseIPv4 / UseIPv6（可选）",
-          onBlur: () => scheduleRender(),
-        onInput: (v) => { dns.queryStrategy = v || undefined; if (!dns.queryStrategy) delete dns.queryStrategy; syncJsonFromObj(file); }
-        }),
-        R.renderStringLines({
-          labelZh: "服务器列表", labelEn: "servers",
-          docUrl: "https://xtls.github.io/config/dns.html",
-          dataPath: `${file.id}:dns.servers`,
-          value: dns.servers,
-          placeholder: "每行一条，例如 1.1.1.1 或 https+local://...",
-          onBlur: () => scheduleRender(),
-        onChange: (arr) => { dns.servers = arr; if (!arr) delete dns.servers; syncJsonFromObj(file); }
-        }),
-        R.renderText({
-          labelZh: "DNS 全量（JSON）", labelEn: "dns",
-          docUrl: "https://xtls.github.io/config/dns.html",
-          dataPath: `${file.id}:dns`,
-          value: "",
-          placeholder: "（如需全字段）请切换到 JSON 标签页编辑",
-          onBlur: () => scheduleRender(),
-        onInput: () => { }
-        })
-      ])));
+      root.appendChild(renderDnsCard({ file, dns, errorMap, pathPrefix: "dns" }));
       return root;
     }
 
@@ -577,6 +545,240 @@ it.querySelector("[data-open]").addEventListener("click", () => {
     });
 
     return card;
+  }
+
+  // ===== log / dns blocks =====
+  function renderLogCard({ file, log, errorMap, pathPrefix }) {
+    const p = pathPrefix || "log";
+    const base = `${file.id}:${p}`;
+
+    return R.renderCard("日志（log）", R.renderFormGrid([
+      R.renderSelect({
+        labelZh: "日志级别", labelEn: "loglevel", docUrl: "https://xtls.github.io/config/log.html",
+        dataPath: `${base}.loglevel`,
+        value: log.loglevel ?? "warning",
+        options: [{ v: "debug" }, { v: "info" }, { v: "warning" }, { v: "error" }, { v: "none" }].map(x => ({ v: x.v, zh: x.v })),
+        onChange: (v) => { log.loglevel = v; syncJsonFromObj(file); renderPreserveUI(); }
+      }),
+      R.renderText({
+        labelZh: "访问日志路径", labelEn: "access", docUrl: "https://xtls.github.io/config/log.html",
+        dataPath: `${base}.access`,
+        value: log.access ?? "",
+        placeholder: "例如 ./access.log（可选）",
+        onBlur: () => scheduleRender(),
+        onInput: (v) => { log.access = v || undefined; if (!log.access) delete log.access; syncJsonFromObj(file); }
+      }),
+      R.renderText({
+        labelZh: "错误日志路径", labelEn: "error", docUrl: "https://xtls.github.io/config/log.html",
+        dataPath: `${base}.error`,
+        value: log.error ?? "",
+        placeholder: "例如 ./error.log（可选）",
+        onBlur: () => scheduleRender(),
+        onInput: (v) => { log.error = v || undefined; if (!log.error) delete log.error; syncJsonFromObj(file); }
+      }),
+      R.renderBool({
+        labelZh: "记录 DNS 查询日志", labelEn: "dnsLog", docUrl: "https://xtls.github.io/config/log.html",
+        dataPath: `${base}.dnsLog`,
+        value: !!log.dnsLog,
+        onChange: (v) => { log.dnsLog = v ? true : undefined; if (!log.dnsLog) delete log.dnsLog; syncJsonFromObj(file); renderPreserveUI(); }
+      })
+    ]));
+  }
+
+  function splitDnsServers(dns){
+    const arr = Array.isArray(dns.servers) ? dns.servers : [];
+    const strings = arr.filter(x => typeof x === "string").map(s => String(s));
+    const objects = arr.filter(x => U.isPlainObject(x)).map(o => U.deepClone(o));
+    return { strings, objects };
+  }
+  function commitDnsServers(dns, strings, objects){
+    const merged = [];
+    if (Array.isArray(strings) && strings.length) merged.push(...strings);
+    if (Array.isArray(objects) && objects.length) merged.push(...objects);
+    if (merged.length) dns.servers = merged;
+    else delete dns.servers;
+  }
+
+  function renderDnsCard({ file, dns, errorMap, pathPrefix }) {
+    const p = pathPrefix || "dns";
+    const base = `${file.id}:${p}`;
+    const docUrl = "https://xtls.github.io/config/dns.html";
+
+    const { strings, objects } = splitDnsServers(dns);
+
+    const topFields = R.renderFormGrid([
+      R.renderSelect({
+        labelZh: "查询策略", labelEn: "queryStrategy", docUrl,
+        dataPath: `${base}.queryStrategy`,
+        value: dns.queryStrategy ?? "",
+        options: [
+          { v: "", zh: "（留空）" },
+          { v: "UseIP" },
+          { v: "UseIPv4" },
+          { v: "UseIPv6" },
+          { v: "AsIs" }
+        ],
+        onChange: (v) => { dns.queryStrategy = v || undefined; if (!dns.queryStrategy) delete dns.queryStrategy; syncJsonFromObj(file); renderPreserveUI(); }
+      }),
+      R.renderText({
+        labelZh: "客户端 IP", labelEn: "clientIp", docUrl,
+        dataPath: `${base}.clientIp`,
+        value: dns.clientIp ?? "",
+        placeholder: "用于 EDNS Client Subnet（可选）",
+        onBlur: () => scheduleRender(),
+        onInput: (v) => { dns.clientIp = v || undefined; if (!dns.clientIp) delete dns.clientIp; syncJsonFromObj(file); }
+      }),
+      R.renderBool({
+        labelZh: "禁用缓存", labelEn: "disableCache", docUrl,
+        dataPath: `${base}.disableCache`,
+        value: !!dns.disableCache,
+        onChange: (v) => { dns.disableCache = v ? true : undefined; if (!dns.disableCache) delete dns.disableCache; syncJsonFromObj(file); renderPreserveUI(); }
+      }),
+      R.renderBool({
+        labelZh: "禁用 fallback", labelEn: "disableFallback", docUrl,
+        dataPath: `${base}.disableFallback`,
+        value: !!dns.disableFallback,
+        onChange: (v) => { dns.disableFallback = v ? true : undefined; if (!dns.disableFallback) delete dns.disableFallback; syncJsonFromObj(file); renderPreserveUI(); }
+      }),
+      R.renderJsonBox({
+        labelZh: "Hosts 映射", labelEn: "hosts", docUrl,
+        dataPath: `${base}.hosts`,
+        value: dns.hosts || {},
+        onInput: (txt) => {
+          try {
+            const parsed = txt.trim() ? JSON.parse(txt) : {};
+            dns.hosts = parsed;
+            if (!dns.hosts || (U.isPlainObject(dns.hosts) && Object.keys(dns.hosts).length === 0)) delete dns.hosts;
+            syncJsonFromObj(file);
+          } catch { syncJsonFromObj(file); }
+        }
+      }),
+      R.renderStringLines({
+        labelZh: "服务器（简写）", labelEn: "servers (string)", docUrl,
+        dataPath: `${base}.servers_strings`,
+        value: strings,
+        placeholder: "每行一条，例如 1.1.1.1 / 8.8.8.8 / https+local://...（可选）",
+        onBlur: () => scheduleRender(),
+        onChange: (arr) => {
+          strings.splice(0, strings.length, ...((arr || []).map(x => String(x))));
+          commitDnsServers(dns, strings, objects);
+          syncJsonFromObj(file);
+        }
+      })
+    ]);
+
+    // DnsServerObject components
+    const header = document.createElement("div");
+    header.style.display = "flex";
+    header.style.alignItems = "center";
+    header.style.justifyContent = "space-between";
+    header.innerHTML = `<div style="font-weight:900">DNS 服务器对象（DnsServerObject）</div><div class="hint">数组 · 可添加多条</div>`;
+
+    header.appendChild(R.button("+ 添加服务器对象", "btn small primary", () => {
+      objects.push({ address: "", port: 53 });
+      commitDnsServers(dns, strings, objects);
+      syncJsonFromObj(file);
+      renderPreserveUI();
+    }));
+
+    const listWrap = document.createElement("div");
+    listWrap.style.display = "flex";
+    listWrap.style.flexDirection = "column";
+    listWrap.style.gap = "10px";
+    listWrap.style.marginTop = "10px";
+
+    objects.forEach((sv, idx) => {
+      if (!U.isPlainObject(sv)) objects[idx] = sv = {};
+      const nodes = [];
+      nodes.push(R.renderText({
+        labelZh: "服务器地址", labelEn: "address", docUrl,
+        dataPath: `${base}.servers.${idx}.address`,
+        value: sv.address ?? "",
+        placeholder: "例如 1.1.1.1 / https+local://...",
+        onBlur: () => scheduleRender(),
+        onInput: (v) => { sv.address = v || undefined; if (!sv.address) delete sv.address; commitDnsServers(dns, strings, objects); syncJsonFromObj(file); }
+      }));
+      nodes.push(R.renderNumber({
+        labelZh: "端口", labelEn: "port", docUrl,
+        dataPath: `${base}.servers.${idx}.port`,
+        value: sv.port,
+        placeholder: "53",
+        onBlur: () => scheduleRender(),
+        onInput: (v) => { sv.port = v; if (sv.port === undefined) delete sv.port; commitDnsServers(dns, strings, objects); syncJsonFromObj(file); }
+      }));
+      nodes.push(R.renderStringLines({
+        labelZh: "匹配域名", labelEn: "domains", docUrl,
+        dataPath: `${base}.servers.${idx}.domains`,
+        value: sv.domains,
+        placeholder: "每行一条，如 geosite:cn / domain:example.com（可选）",
+        onBlur: () => scheduleRender(),
+        onChange: (arr) => { sv.domains = arr; if (!arr) delete sv.domains; commitDnsServers(dns, strings, objects); syncJsonFromObj(file); }
+      }));
+      nodes.push(R.renderStringLines({
+        labelZh: "期望 IP", labelEn: "expectIPs", docUrl,
+        dataPath: `${base}.servers.${idx}.expectIPs`,
+        value: sv.expectIPs,
+        placeholder: "每行一条，如 10.0.0.0/8 / geoip:cn（可选）",
+        onBlur: () => scheduleRender(),
+        onChange: (arr) => { sv.expectIPs = arr; if (!arr) delete sv.expectIPs; commitDnsServers(dns, strings, objects); syncJsonFromObj(file); }
+      }));
+      nodes.push(R.renderText({
+        labelZh: "客户端 IP", labelEn: "clientIP", docUrl,
+        dataPath: `${base}.servers.${idx}.clientIP`,
+        value: sv.clientIP ?? "",
+        placeholder: "可选",
+        onBlur: () => scheduleRender(),
+        onInput: (v) => { sv.clientIP = v || undefined; if (!sv.clientIP) delete sv.clientIP; commitDnsServers(dns, strings, objects); syncJsonFromObj(file); }
+      }));
+      nodes.push(R.renderBool({
+        labelZh: "跳过 fallback", labelEn: "skipFallback", docUrl,
+        dataPath: `${base}.servers.${idx}.skipFallback`,
+        value: !!sv.skipFallback,
+        onChange: (v) => { sv.skipFallback = v ? true : undefined; if (!sv.skipFallback) delete sv.skipFallback; commitDnsServers(dns, strings, objects); syncJsonFromObj(file); renderPreserveUI(); }
+      }));
+      nodes.push(R.renderSelect({
+        labelZh: "查询策略", labelEn: "queryStrategy", docUrl,
+        dataPath: `${base}.servers.${idx}.queryStrategy`,
+        value: sv.queryStrategy ?? "",
+        options: [
+          { v: "", zh: "（留空）" },
+          { v: "UseIP" },
+          { v: "UseIPv4" },
+          { v: "UseIPv6" },
+          { v: "AsIs" }
+        ],
+        onChange: (v) => { sv.queryStrategy = v || undefined; if (!sv.queryStrategy) delete sv.queryStrategy; commitDnsServers(dns, strings, objects); syncJsonFromObj(file); renderPreserveUI(); }
+      }));
+      nodes.push(R.renderText({
+        labelZh: "标识", labelEn: "tag", docUrl,
+        dataPath: `${base}.servers.${idx}.tag`,
+        value: sv.tag ?? "",
+        placeholder: "可选",
+        onBlur: () => scheduleRender(),
+        onInput: (v) => { sv.tag = v || undefined; if (!sv.tag) delete sv.tag; commitDnsServers(dns, strings, objects); syncJsonFromObj(file); }
+      }));
+
+      const actions = [
+        R.button("上移", "btn small", () => { if (idx > 0) { [objects[idx - 1], objects[idx]] = [objects[idx], objects[idx - 1]]; commitDnsServers(dns, strings, objects); syncJsonFromObj(file); renderPreserveUI(); } }),
+        R.button("下移", "btn small", () => { if (idx < objects.length - 1) { [objects[idx + 1], objects[idx]] = [objects[idx], objects[idx + 1]]; commitDnsServers(dns, strings, objects); syncJsonFromObj(file); renderPreserveUI(); } }),
+        R.button("删除", "btn small danger", () => { objects.splice(idx, 1); commitDnsServers(dns, strings, objects); syncJsonFromObj(file); renderPreserveUI(); })
+      ];
+      listWrap.appendChild(collapsibleCard({
+        title: `服务器 #${idx + 1}${sv.address ? `（${U.escapeHtml(String(sv.address)).slice(0, 26)}）` : ""}`,
+        body: R.renderFormGrid(nodes),
+        actions,
+        collapseKey: `${file.id}::dns.servers::${idx}`,
+        defaultCollapsed: true
+      }));
+    });
+
+    const wrap = document.createElement("div");
+    wrap.appendChild(topFields);
+    wrap.appendChild(divider());
+    wrap.appendChild(header);
+    wrap.appendChild(listWrap);
+
+    return R.renderCard("DNS（dns）", wrap);
   }
 
 
@@ -898,6 +1100,7 @@ if (balEl && outEl && outEl.value) { balEl.disabled = true; }
         value: r.domain,
         placeholder: "每行一条，如 geosite:cn / domain:example.com / keyword:google",
         dataPath: `${file.id}:${pathPrefix}.rules.${idx}.domain`,
+        errText: V.getError(errorMap, file.id, `${pathPrefix}.rules.${idx}.domain`),
         onBlur: () => scheduleRender(),
         onChange: (arr) => { r.domain = arr; if (!arr) delete r.domain; syncJsonFromObj(file); }
       }));
@@ -933,7 +1136,7 @@ if (balEl && outEl && outEl.value) { balEl.disabled = true; }
         value: r.inboundTag,
         placeholder: "每行一个 inbound tag（可选）",
         dataPath: `${file.id}:${pathPrefix}.rules.${idx}.inboundTag`,
-        errText: "", // 单项错误会映射到 routing.rules.i.inboundTag.j（这里不逐条显示）
+        errText: V.getError(errorMap, file.id, `${pathPrefix}.rules.${idx}.inboundTag`),
         onBlur: () => scheduleRender(),
         onChange: (arr) => { r.inboundTag = arr; if (!arr) delete r.inboundTag; syncJsonFromObj(file); }
       }));
@@ -960,22 +1163,50 @@ if (balEl && outEl && outEl.value) { balEl.disabled = true; }
   // ===== 下载门禁：发现错误 → 弹窗允许取消或继续 =====
   function gateDownload(doDownload) {
     const res = V.validateAll(state);
-    if (!res.hasError) {
-      doDownload();
-      return;
-    }
-    const list = res.errs.slice(0, 50).map(e => `<li><span class="mono">${U.escapeHtml(e.path)}</span>：${U.escapeHtml(e.message)}</li>`).join("");
-    openModal(`
-      <div class="errbox">
-        <div style="font-weight:900;margin-bottom:6px">下载前校验未通过</div>
-        <div class="smallnote">${U.escapeHtml(res.summary)}</div>
+    const disclaimer = `
+      <div class="okbox">
+        <div style="font-weight:900;margin-bottom:6px">重要提示</div>
+        <div class="smallnote">本生成器仅对 <b>部分</b> 常见格式错误进行校验（例如：routing 引用的 tag 是否存在、域名/IP 书写格式等），不保证配置在 Xray 中一定可用或按预期运行。下载后请结合文档与实际环境自行验证。</div>
       </div>
-      <div class="divider"></div>
-      <div style="font-weight:800;margin-bottom:6px">错误明细（最多显示 50 条）</div>
-      <ul style="margin:0;padding-left:18px">${list}</ul>
-      <div class="divider"></div>
-      <div class="smallnote">你可以取消下载并修正错误，或选择“仍然下载”。</div>
-    `, doDownload);
+    `;
+
+    let html = disclaimer;
+    let title = "下载前提示";
+    let continueText = "继续下载";
+    let continueClass = "btn primary";
+
+    if (res.hasError) {
+      title = "下载前提示：发现问题";
+      continueText = "仍然下载";
+      continueClass = "btn danger";
+      const list = res.errs.slice(0, 50).map(e => `<li><span class="mono">${U.escapeHtml(e.path)}</span>：${U.escapeHtml(e.message)}</li>`).join("");
+      html += `
+        <div class="divider"></div>
+        <div class="errbox">
+          <div style="font-weight:900;margin-bottom:6px">校验未通过</div>
+          <div class="smallnote">${U.escapeHtml(res.summary)}</div>
+        </div>
+        <div class="divider"></div>
+        <div style="font-weight:800;margin-bottom:6px">错误明细（最多显示 50 条）</div>
+        <ul style="margin:0;padding-left:18px">${list}</ul>
+      `;
+    } else {
+      html += `
+        <div class="divider"></div>
+        <div class="okbox">
+          <div style="font-weight:900;margin-bottom:6px">未发现已覆盖范围内的格式错误</div>
+          <div class="smallnote">你仍然可以继续下载；如遇运行问题，请优先对照文档与日志排查。</div>
+        </div>
+      `;
+    }
+
+    openModal({
+      title,
+      html,
+      continueText,
+      continueClass,
+      onContinue: doDownload
+    });
   }
 
   // ===== 顶部事件 =====
@@ -1077,6 +1308,12 @@ if (balEl && outEl && outEl.value) { balEl.disabled = true; }
     elBtnAddRoutingFile.style.display = showAdd ? "inline-flex" : "none";
     elBtnAddInboundFile.style.display = showAdd ? "inline-flex" : "none";
     elBtnAddOutboundFile.style.display = showAdd ? "inline-flex" : "none";
+
+    // tabs active style
+    document.querySelectorAll(".tab").forEach(btn => {
+      const k = btn.getAttribute("data-tab");
+      btn.classList.toggle("active", k === state.tab);
+    });
 
     renderFilePlan(res.errorMap);
     renderActiveContent(res.errorMap);

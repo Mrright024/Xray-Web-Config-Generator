@@ -60,11 +60,84 @@
 
   function validateIpLines(lines){
     const bad = [];
-    (lines || []).forEach((line) => {
+    (lines || []).forEach((line, idx) => {
       const s = String(line).trim();
-      if (!looksLikeIpToken(s)) return;
+      if (!s) return;
+
+      // 允许常见前缀写法（routing.ip）
+      const m = s.match(/^([a-zA-Z][a-zA-Z0-9_-]*):(.*)$/);
+      if (m) {
+        const pref = m[1].toLowerCase();
+        const rest = (m[2] || "").trim();
+        if ((pref === "geoip" || pref === "ext") && rest) return;
+        if (pref === "geoip" || pref === "ext") {
+          bad.push({ idx, value: s, reason: "前缀后内容为空" });
+          return;
+        }
+        bad.push({ idx, value: s, reason: `不支持的前缀：${pref}` });
+        return;
+      }
+
       const ok = isIPv4(s) || isIPv6(s) || isCIDR(s);
-      if (!ok) bad.push(s);
+      if (!ok) bad.push({ idx, value: s, reason: "IP/IP段格式" });
+    });
+    return bad;
+  }
+
+  // routing.domain：允许常见前缀写法 + 裸域名（尽量宽松，避免误报）
+  function isDomainNameLike(s){
+    s = String(s).trim();
+    if (!s) return false;
+    if (s === "*") return true;
+    // 允许 *.example.com
+    if (s.startsWith("*.")) s = s.slice(2);
+    // 允许末尾点（FQDN）
+    if (s.endsWith(".")) s = s.slice(0, -1);
+    if (!s) return false;
+    // 允许单标签（如 localhost）
+    const labels = s.split(".");
+    if (!labels.length) return false;
+    const okLabel = (lb) => {
+      if (!lb || lb.length > 63) return false;
+      if (!/^[a-zA-Z0-9-]+$/.test(lb)) return false;
+      if (lb.startsWith("-") || lb.endsWith("-")) return false;
+      return true;
+    };
+    return labels.every(okLabel);
+  }
+
+  function validateDomainLines(lines){
+    const bad = [];
+    (lines || []).forEach((line, idx) => {
+      const s0 = String(line).trim();
+      if (!s0) return;
+      const s = s0;
+
+      // 前缀写法
+      const m = s.match(/^([a-zA-Z][a-zA-Z0-9_-]*):(.*)$/);
+      if (m){
+        const p = m[1].toLowerCase();
+        const rest = (m[2] || "").trim();
+        if (p === "geosite" || p === "ext"){
+          if (!rest) bad.push({ idx, value: s, reason: `${p}: 后为空` });
+          return;
+        }
+        if (p === "regexp" || p === "keyword"){
+          if (!rest) bad.push({ idx, value: s, reason: `${p}: 后为空` });
+          return;
+        }
+        if (p === "domain" || p === "full"){
+          if (!rest || !isDomainNameLike(rest)) bad.push({ idx, value: s, reason: `${p}: 域名格式` });
+          return;
+        }
+        // 其他未知前缀：不拦截（避免误伤扩展）
+        return;
+      }
+
+      // 裸域名
+      if (!isDomainNameLike(s)){
+        bad.push({ idx, value: s, reason: "域名格式" });
+      }
     });
     return bad;
   }
@@ -105,13 +178,16 @@
       // inboundTag（array）
       const ibs = rule?.inboundTag;
       if (Array.isArray(ibs)){
+        const missing = [];
         ibs.forEach((t, i) => {
           const v = String(t ?? "").trim();
           if (!v) return;
-          if (!tags.inboundTags.has(v)){
-            pushErr(fileId, `${rulePathPrefix}.inboundTag.${i}`, `inboundTag 不存在：${v}`);
-          }
+          if (!tags.inboundTags.has(v)) missing.push({ idx: i, value: v });
         });
+        if (missing.length){
+          const show = missing.slice(0, 6).map(x => `第${x.idx+1}行：${x.value}`).join("；");
+          pushErr(fileId, `${rulePathPrefix}.inboundTag`, `inboundTag 不存在：${show}${missing.length>6?" …":""}`);
+        }
       }
 
       // outboundTag vs balancerTag（互斥 + 引用存在性）
@@ -136,7 +212,17 @@
       if (Array.isArray(ipArr)){
         const bad = validateIpLines(ipArr);
         if (bad.length){
-          pushErr(fileId, `${rulePathPrefix}.ip`, `IP/IP段格式错误：${bad.slice(0,5).join(", ")}${bad.length>5?" …":""}`);
+          const show = bad.slice(0, 6).map(x => `第${x.idx+1}行：${x.value}`).join("；");
+          pushErr(fileId, `${rulePathPrefix}.ip`, `IP/IP段格式错误：${show}${bad.length>6?" …":""}`);
+        }
+      }
+
+      const dmArr = rule?.domain;
+      if (Array.isArray(dmArr)){
+        const bad = validateDomainLines(dmArr);
+        if (bad.length){
+          const show = bad.slice(0, 6).map(x => `第${x.idx+1}行：${x.value}${x.reason?`（${x.reason}）`:""}`).join("；");
+          pushErr(fileId, `${rulePathPrefix}.domain`, `域名匹配格式错误：${show}${bad.length>6?" …":""}`);
         }
       }
     };
@@ -175,7 +261,7 @@
         hasError: errs.length > 0,
         errs,
         errorMap: toErrorMap(errs),
-        summary: `共 ${errs.length} 条错误（主要为 routing 引用 tag / IP/IP段 格式）`
+        summary: `共 ${errs.length} 条错误（主要为 routing 引用 tag / 域名匹配 / IP/IP段 格式）`
       };
     },
     getError(errorMap, fileId, path){
