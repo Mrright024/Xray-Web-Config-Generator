@@ -151,3 +151,41 @@ textarea{min-height:92px;resize:vertical;font-family:var(--mono);font-size:12.5p
 .modal-title{font-weight:850}
 .modal-body{padding:12px;max-height:52vh;overflow:auto}
 .modal-actions{display:flex;gap:10px;justify-content:flex-end;padding:12px;border-top:1px solid var(--border);background:rgba(255,255,255,.02)}
+
+
+/* === Code editor (local): line numbers + tab indent === */
+.code-editor{
+  display:grid;
+  grid-template-columns:56px 1fr;
+  border:1px solid var(--border);
+  border-radius:12px;
+  overflow:hidden;
+  background:rgba(255,255,255,.02);
+}
+.code-gutter{
+  padding:10px 8px;
+  border-right:1px solid var(--border);
+  background:rgba(255,255,255,.03);
+  user-select:none;
+  text-align:right;
+  line-height:1.6;
+  font-size:12px;
+  color:var(--muted);
+  white-space:pre;
+  overflow:hidden;
+}
+.code-text{
+  border:0;
+  outline:none;
+  resize:none;
+  padding:10px 12px;
+  line-height:1.6;
+  font-size:12px;
+  background:transparent;
+  color:var(--text);
+  overflow:auto;
+  min-height:100%;
+}
+.code-editor.json-editor{min-height:360px;height:60vh;}
+.code-editor.merge-preview{min-height:420px;height:70vh;}
+.code-editor .code-text{height:100%;}

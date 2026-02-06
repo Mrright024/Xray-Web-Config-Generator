@@ -265,11 +265,116 @@ function renderJsonBox({labelZh,labelEn,docUrl,value,onInput,onBlur=null,errText
     return renderFormGrid(nodes);
   }
 
+  
+  // === Local code editor: line numbers + tab indent (no external scripts) ===
+  function renderCodeEditor({ value="", readOnly=false, spellcheck=false, dataPath="", className="", onInput=null, onBlur=null } = {}) {
+    const wrap = document.createElement("div");
+    wrap.className = `code-editor ${className || ""}`.trim();
+
+    const gutter = document.createElement("div");
+    gutter.className = "code-gutter mono";
+
+    const ta = document.createElement("textarea");
+    ta.className = "code-text mono";
+    ta.spellcheck = !!spellcheck;
+    if (readOnly) ta.setAttribute("readonly", "readonly");
+    if (dataPath) ta.setAttribute("data-path", dataPath);
+    ta.value = String(value ?? "");
+
+    const updateGutter = () => {
+      const lines = ta.value.split(/\r?\n/).length || 1;
+      // avoid huge DOM; cap display but keep last line index correct
+      const max = Math.min(lines, 5000);
+      let html = "";
+      for (let i = 1; i <= max; i++) html += `${i}\n`;
+      if (lines > max) html += `…\n${lines}\n`;
+      gutter.textContent = html;
+    };
+
+    const syncScroll = () => { gutter.scrollTop = ta.scrollTop; };
+
+    const insertAt = (text) => {
+      const start = ta.selectionStart ?? 0;
+      const end = ta.selectionEnd ?? start;
+      const v = ta.value;
+      ta.value = v.slice(0, start) + text + v.slice(end);
+      const pos = start + text.length;
+      ta.setSelectionRange(pos, pos);
+    };
+
+    const indentSelection = (indent) => {
+      const v = ta.value;
+      const start = ta.selectionStart ?? 0;
+      const end = ta.selectionEnd ?? start;
+      const lineStart = v.lastIndexOf("\n", start - 1) + 1;
+      const lineEnd = v.indexOf("\n", end);
+      const sliceEnd = (lineEnd === -1) ? v.length : lineEnd;
+      const block = v.slice(lineStart, sliceEnd);
+      const lines = block.split(/\r?\n/);
+      const next = lines.map(l => indent + l).join("\n");
+      ta.value = v.slice(0, lineStart) + next + v.slice(sliceEnd);
+      const delta = indent.length * lines.length;
+      ta.setSelectionRange(start + indent.length, end + delta);
+    };
+
+    const unindentSelection = (indent) => {
+      const v = ta.value;
+      const start = ta.selectionStart ?? 0;
+      const end = ta.selectionEnd ?? start;
+      const lineStart = v.lastIndexOf("\n", start - 1) + 1;
+      const lineEnd = v.indexOf("\n", end);
+      const sliceEnd = (lineEnd === -1) ? v.length : lineEnd;
+      const block = v.slice(lineStart, sliceEnd);
+      const lines = block.split(/\r?\n/);
+      let removedTotal = 0;
+      const next = lines.map(l => {
+        if (l.startsWith(indent)) { removedTotal += indent.length; return l.slice(indent.length); }
+        if (l.startsWith("\t")) { removedTotal += 1; return l.slice(1); }
+        return l;
+      }).join("\n");
+      ta.value = v.slice(0, lineStart) + next + v.slice(sliceEnd);
+      ta.setSelectionRange(Math.max(lineStart, start - indent.length), Math.max(lineStart, end - removedTotal));
+    };
+
+    ta.addEventListener("scroll", syncScroll);
+
+    ta.addEventListener("keydown", (e) => {
+      if (e.key === "Tab") {
+        e.preventDefault();
+        const indent = "  ";
+        const start = ta.selectionStart ?? 0;
+        const end = ta.selectionEnd ?? start;
+        if (start !== end) {
+          if (e.shiftKey) unindentSelection(indent);
+          else indentSelection(indent);
+        } else {
+          if (e.shiftKey) return;
+          insertAt(indent);
+        }
+        updateGutter();
+        if (onInput) onInput(ta.value);
+      }
+    });
+
+    ta.addEventListener("input", () => {
+      updateGutter();
+      if (onInput) onInput(ta.value);
+    });
+
+    ta.addEventListener("blur", () => { if (onBlur) onBlur(ta.value); });
+
+    updateGutter();
+    wrap.appendChild(gutter);
+    wrap.appendChild(ta);
+    return wrap;
+  }
+
   X.render.api = {
     button, renderCard, renderFormGrid,
     renderBySchema,
     renderText, renderNumber, renderSelect, renderBool, renderStringLines,
-    renderJsonBox
+    renderJsonBox,
+    renderCodeEditor
   };
 
 })();

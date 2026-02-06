@@ -136,7 +136,7 @@
   }
 
   function syncJsonFromObj(file) {
-    file.jsonText = U.stringifyJsonClean(file.obj);
+    file.jsonText = U.stringifyJsonClean(U.pruneConfig(file.obj));
     file.parseError = "";
     scheduleSave();
     setParseOk();
@@ -331,77 +331,152 @@ it.querySelector("[data-open]").addEventListener("click", () => {
     }
   }
 
+  
   function renderJsonEditor(file) {
     const root = document.createElement("div");
-    const err = file.parseError ? `<div class="errbox"><div style="font-weight:800;margin-bottom:6px">解析失败</div><div class="mono" style="white-space:pre-wrap">${U.escapeHtml(file.parseError)}</div></div><div class="divider"></div>` : "";
-    root.innerHTML = `
-      ${err}
-      <div class="card">
-        <div class="card-head">
-          <div>
-            <div class="card-title">JSON 编辑</div>
-            <div class="hint">仅允许纯 JSON；解析成功后会同步刷新表单</div>
-          </div>
-          <div class="card-actions">
-            <button class="btn small" id="btnFormat" type="button">格式化</button>
-            <button class="btn small danger" id="btnReset" type="button">重置</button>
-          </div>
+
+    const card = document.createElement("div");
+    card.className = "card";
+    card.innerHTML = `
+      <div class="card-head">
+        <div>
+          <div class="card-title">JSON 编辑</div>
+          <div class="hint">仅允许纯 JSON；解析成功后会同步刷新表单（在编辑器失焦或点击格式化后生效）</div>
         </div>
-        <textarea id="jsonArea" spellcheck="false"></textarea>
-        <div class="smallnote" style="margin-top:8px">
-          提示：下载时不会附加任何额外字符，也不会在文件末尾补换行。
+        <div class="card-actions">
+          <button class="btn small" id="btnFormat" type="button">格式化</button>
+          <button class="btn small danger" id="btnReset" type="button">重置</button>
         </div>
       </div>
+
+      <div id="jsonErrMount"></div>
+      <div id="jsonEditorMount"></div>
+
+      <div class="smallnote" style="margin-top:8px">
+        提示：下载时不会附加任何额外字符，也不会在文件末尾补换行。
+      </div>
     `;
+    root.appendChild(card);
 
-    const area = root.querySelector("#jsonArea");
-    area.value = file.jsonText || U.stringifyJsonClean(file.obj);
-    area.addEventListener("input", () => {
-      const text = area.value;
-      file.jsonText = text;
+    const errMount = card.querySelector("#jsonErrMount");
+    const editorMount = card.querySelector("#jsonEditorMount");
+
+    const errBox = document.createElement("div");
+    errBox.className = "errbox";
+    errBox.style.marginBottom = "10px";
+    errBox.innerHTML = `
+      <div style="font-weight:700;margin-bottom:4px">解析错误</div>
+      <div class="mono small" id="jsonErrText"></div>
+    `;
+    const errText = errBox.querySelector("#jsonErrText");
+    errMount.appendChild(errBox);
+
+    const updateErrUI = () => {
+      if (file.parseError) {
+        errBox.style.display = "block";
+        errText.textContent = file.parseError;
+      } else {
+        errBox.style.display = "none";
+        errText.textContent = "";
+      }
+    };
+
+    const initialText = file.jsonText || U.stringifyJsonClean(U.pruneConfig(file.obj));
+    file.jsonText = initialText;
+
+    let parseTimer = 0;
+
+    const tryParse = (text, { refreshForm = false } = {}) => {
+      const raw = String(text ?? "");
+      file.jsonText = raw;
       try {
-        const parsed = text.trim() ? JSON.parse(text) : {};
+        const parsed = JSON.parse(raw.trim() || "{}");
         file.obj = parsed;
         file.parseError = "";
         setParseOk();
+        updateErrUI();
+        save();
+        if (refreshForm) scheduleRender();
       } catch (e) {
-        file.parseError = String(e);
+        file.parseError = String((e && e.message) ? e.message : e);
         setParseErr();
+        updateErrUI();
+        save();
       }
-      save();
+    };
+
+    const debounceParse = (text) => {
+      clearTimeout(parseTimer);
+      parseTimer = setTimeout(() => tryParse(text, { refreshForm: false }), 350);
+    };
+
+    const editor = R.renderCodeEditor({
+      value: initialText,
+      readOnly: false,
+      spellcheck: false,
+      dataPath: `${file.id}:__json`,
+      className: "json-editor",
+      onInput: (v) => {
+        file.jsonText = String(v ?? "");
+        save();
+        // 输入时只做状态更新与解析（防抖），不重渲染，避免回顶/失焦
+        debounceParse(file.jsonText);
+      },
+      onBlur: (v) => {
+        // 失焦时立即解析并刷新表单（若可解析）
+        clearTimeout(parseTimer);
+        tryParse(v, { refreshForm: true });
+      }
     });
 
-    root.querySelector("#btnFormat").addEventListener("click", () => {
+    editorMount.appendChild(editor);
+
+    const ta = editor.querySelector("textarea");
+
+    // 初始化错误 UI
+    updateErrUI();
+
+    card.querySelector("#btnFormat").addEventListener("click", () => {
       try {
-        const parsed = JSON.parse(area.value.trim() || "{}");
+        const parsed = JSON.parse((ta.value || "").trim() || "{}");
         const formatted = U.stringifyJsonClean(parsed);
-        area.value = formatted;
-        file.jsonText = formatted;
+        ta.value = formatted;
+        // 触发 gutter 更新
+        ta.dispatchEvent(new Event("input"));
         file.obj = parsed;
+        file.jsonText = formatted;
         file.parseError = "";
         setParseOk();
+        updateErrUI();
         save();
         scheduleRender();
       } catch (e) {
-        file.parseError = String(e);
+        file.parseError = String((e && e.message) ? e.message : e);
         setParseErr();
+        updateErrUI();
         save();
-        scheduleRender();
       }
     });
 
-    root.querySelector("#btnReset").addEventListener("click", () => {
+    card.querySelector("#btnReset").addEventListener("click", () => {
       if (state.mode === "single") {
         file.obj = ST.defaultSingleConfig();
       } else {
-        file.obj = U.deepClone(file.obj?.log ? { log: { loglevel: "warning" } } : file.obj);
+        file.obj = U.deepClone(ST.buildFile(file.part).obj);
       }
+      file.parseError = "";
+      setParseOk();
       syncJsonFromObj(file);
+      // syncJsonFromObj 生成 jsonText（已做剪枝），直接回填
+      ta.value = file.jsonText || "";
+      ta.dispatchEvent(new Event("input"));
+      updateErrUI();
       renderPreserveUI();
     });
 
     return root;
   }
+
 
   function renderMergePreview() {
     const root = document.createElement("div");
@@ -424,8 +499,19 @@ it.querySelector("[data-open]").addEventListener("click", () => {
           <a class="btn small ghost" href="${X.state.DOC.multiple}" target="_blank" rel="noopener">打开“多文件配置”文档</a>
         </div>
       </div>
-      <textarea class="mono" spellcheck="false" readonly>${U.escapeHtml(text)}</textarea>
+      <div id="mergeEditorMount"></div>
     `;
+    const mergeMount = box.querySelector("#mergeEditorMount");
+    if (mergeMount) {
+      mergeMount.appendChild(R.renderCodeEditor({
+        value: text,
+        readOnly: true,
+        spellcheck: false,
+        dataPath: "__merge:preview",
+        className: "merge-preview"
+      }));
+    }
+
     box.querySelector("#btnDownloadMerged").addEventListener("click", () => {
       gateDownload(() => EXP.downloadText("config.json", text));
     });
@@ -581,6 +667,14 @@ it.querySelector("[data-open]").addEventListener("click", () => {
         dataPath: `${base}.dnsLog`,
         value: !!log.dnsLog,
         onChange: (v) => { log.dnsLog = v ? true : undefined; if (!log.dnsLog) delete log.dnsLog; syncJsonFromObj(file); renderPreserveUI(); }
+      }),
+      R.renderText({
+        labelZh: "IP地址遮罩", labelEn: "maskAddress", docUrl: "https://xtls.github.io/config/log.html",
+        dataPath: `${base}.maskAddress`,
+        value: log.maskAddress ?? "",
+        placeholder: "例如 quarter / half / full 或 /16+/32（可选）",
+        onBlur: () => scheduleRender(),
+        onInput: (v) => { log.maskAddress = (v || undefined); if (!log.maskAddress) delete log.maskAddress; syncJsonFromObj(file); }
       })
     ]));
   }
@@ -1261,7 +1355,7 @@ if (balEl && outEl && outEl.value) { balEl.disabled = true; }
 
     gateDownload(() => {
       if (state.mode === "single") {
-        const text = f.parseError ? (f.jsonText || "") : U.stringifyJsonClean(f.obj);
+        const text = f.parseError ? (f.jsonText || "") : U.stringifyJsonClean(U.pruneConfig(f.obj));
         EXP.downloadText("config.json", text);
         return;
       }
@@ -1269,7 +1363,7 @@ if (balEl && outEl && outEl.value) { balEl.disabled = true; }
       const filesOfPart = state.files.filter(x => x.part === f.part);
       const idx = filesOfPart.findIndex(x => x.id === f.id);
       const filename = ST.computeFileName(f.part, idx + 1, filesOfPart.length, f.suffix);
-      const text = f.parseError ? (f.jsonText || "") : U.stringifyJsonClean(f.obj);
+      const text = f.parseError ? (f.jsonText || "") : U.stringifyJsonClean(U.pruneConfig(f.obj));
       EXP.downloadText(filename, text);
     });
   });
@@ -1277,16 +1371,19 @@ if (balEl && outEl && outEl.value) { balEl.disabled = true; }
   elBtnDownloadAll.addEventListener("click", () => {
     gateDownload(() => {
       if (state.mode === "single") {
-        EXP.downloadText("config.json", U.stringifyJsonClean(state.single.obj));
+        EXP.downloadText("config.json", U.stringifyJsonClean(U.pruneConfig(state.single.obj)));
         return;
       }
       // multi：按 PARTS + part 内顺序批量下载
       X.state.PARTS.forEach(p => {
-        const files = state.files.filter(f => f.part === p.key);
-        files.forEach((f, i) => {
-          if (f.parseError) return;
+        const raw = state.files.filter(f => f.part === p.key && !f.parseError);
+        const files = raw.map(f => ({ f, cleaned: U.pruneConfig(f.obj) }))
+          .filter(x => !(U.isPlainObject(x.cleaned) && Object.keys(x.cleaned).length === 0));
+
+        files.forEach((x, i) => {
+          const f = x.f;
           const filename = ST.computeFileName(p.key, i + 1, files.length, f.suffix);
-          EXP.downloadText(filename, U.stringifyJsonClean(f.obj));
+          EXP.downloadText(filename, U.stringifyJsonClean(x.cleaned));
         });
       });
     });

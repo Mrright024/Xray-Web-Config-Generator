@@ -58,7 +58,7 @@
   }
 
   function mergeAll(st){
-    if (st.mode === "single") return st.single.obj;
+    if (st.mode === "single") return U.pruneConfig(st.single.obj);
     let merged = {};
     // 按 PARTS 顺序合并；part 内按当前文件顺序合并
     for (const p of X.state.PARTS){
@@ -67,7 +67,7 @@
         merged = mergeTwo(merged, f.obj);
       }
     }
-    return merged;
+    return U.pruneConfig(merged);
   }
 
   X.exporter.api = { downloadText, mergeAll };
