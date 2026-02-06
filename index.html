@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Xray JSON 配置表单生成器（字段表单 / 单文件 & 多文件 / 离线 Schema）</title>
+  <link rel="stylesheet" href="./assets/style.css" />
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="brand">
+      <span class="brand-title">Xray 配置表单生成器</span>
+      <span class="pill">v4 · 离线 schema · 字段表单</span>
+    </div>
+
+    <div class="toolbar">
+      <div class="seg" role="tablist" aria-label="mode">
+        <button id="modeSingle" class="active" type="button">单文件</button>
+        <button id="modeMulti" type="button">多文件</button>
+      </div>
+      <button class="btn ghost" id="btnDocs" type="button">打开文档总览</button>
+      <button class="btn primary" id="btnDownloadActive" type="button">下载当前</button>
+      <button class="btn" id="btnDownloadAll" type="button">下载全部</button>
+    </div>
+  </header>
+
+  <div class="main">
+    <aside>
+      <div class="aside-head">
+        <div>
+          <div class="aside-title">配置文件计划</div>
+          <div class="hint" id="asideHint">单文件：config.json</div>
+        </div>
+        <div class="toolbar">
+          <button class="btn small" id="btnAddRoutingFile" type="button" title="仅多文件可用">+ routing</button>
+          <button class="btn small" id="btnAddInboundFile" type="button" title="仅多文件可用">+ inbound</button>
+          <button class="btn small" id="btnAddOutboundFile" type="button" title="仅多文件可用">+ outbound</button>
+        </div>
+      </div>
+
+      <div class="aside-body" id="filePlan"></div>
+
+      <div class="aside-foot">
+        <div class="kpi">
+          <span class="chip">中文字段名可点 → 打开文档锚点</span>
+          <span class="chip">改选项即生效</span>
+          <span class="chip">表单 + JSON 双视图</span>
+        </div>
+        <div class="smallnote" style="margin-top:10px">
+          多文件：每个文件仅包含一个 part；仅 routing/inbounds/outbounds 允许多文件拆分并自动编号。
+        </div>
+      </div>
+    </aside>
+
+    <section>
+      <div class="tabs">
+        <button class="tab active" data-tab="form" type="button">表单</button>
+        <button class="tab" data-tab="json" type="button">JSON</button>
+        <button class="tab" data-tab="merge" type="button" id="tabMerge">合并预览</button>
+
+        <div class="right status" id="parseStatus">
+          <span class="dot" id="parseDot"></span>
+          <span id="parseText">JSON 可解析</span>
+        </div>
+      </div>
+
+      <div class="content" id="content"></div>
+    </section>
+  </div>
+</div>
+
+<!-- Modal：下载前错误提示 -->
+<div class="modal hidden" id="modal">
+  <div class="modal-backdrop" data-close="1"></div>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="modal-head">
+      <div class="modal-title" id="modalTitle">检测到配置错误</div>
+      <button class="btn small ghost" id="modalClose" type="button">关闭</button>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+    <div class="modal-actions">
+      <button class="btn" id="modalCancel" type="button">取消下载</button>
+      <button class="btn danger" id="modalContinue" type="button">仍然下载</button>
+    </div>
+  </div>
+</div>
+
+<!-- Schema registry + schemas（全部本地，不拉取远端） -->
+<script src="./schemas/registry.js"></script>
+<script src="./schemas/transport/streamSettings.schema.js"></script>
+<script src="./schemas/protocol/inbounds.schema.js"></script>
+<script src="./schemas/protocol/outbounds.schema.js"></script>
+
+<!-- App code -->
+<script src="./src/util.js"></script>
+<script src="./src/state.js"></script>
+<script src="./src/validators.js"></script>
+<script src="./src/schema_engine.js"></script>
+<script src="./src/render.js"></script>
+<script src="./src/dnd.js"></script>
+<script src="./src/exporter.js"></script>
+<script src="./src/app.js"></script>
+</body>
+</html>
