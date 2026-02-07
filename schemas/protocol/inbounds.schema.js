@@ -40,26 +40,80 @@
     ]
   });
 
-  // vmess inbound（先提供 clients JSON，避免错漏；后续可细拆 ClientObject 字段）
+  // ============ ClientObject schemas (component-style clients) ============
+  // VMessUserObject
+  set("inbound.vmess.client", {
+    docUrl:"https://xtls.github.io/config/inbounds/vmess.html",
+    itemExample:{ id:"", level:0, email:"" },
+    fields:[
+      {key:"id",labelZh:"用户ID",labelEn:"id",type:"string",placeholder:"UUID，例如：a3482e88-686a-4a58-8126-99c9df64b7bf"},
+      {key:"level",labelZh:"等级",labelEn:"level",type:"number"},
+      {key:"email",labelZh:"邮箱标识",labelEn:"email",type:"string",placeholder:"可选"},
+      {key:"alterId",labelZh:"AlterId（旧）",labelEn:"alterId",type:"number",placeholder:"新协议通常为 0 或不填"},
+      {key:"security",labelZh:"加密",labelEn:"security",type:"select",options:[
+        {v:"",zh:"（不设置）"},
+        {v:"auto",zh:"auto"},
+        {v:"aes-128-gcm",zh:"aes-128-gcm"},
+        {v:"chacha20-poly1305",zh:"chacha20-poly1305"},
+        {v:"none",zh:"none"}
+      ]}
+    ]
+  });
+
+  // VLESSUserObject
+  set("inbound.vless.client", {
+    docUrl:"https://xtls.github.io/config/inbounds/vless.html",
+    itemExample:{ id:"", level:0, email:"" },
+    fields:[
+      {key:"id",labelZh:"用户ID",labelEn:"id",type:"string",placeholder:"UUID"},
+      {key:"level",labelZh:"等级",labelEn:"level",type:"number"},
+      {key:"email",labelZh:"邮箱标识",labelEn:"email",type:"string",placeholder:"可选"},
+      // 勾选式 flow：勾选 => flow=xtls-rprx-vision；不勾选 => 不输出 flow
+      {key:"flow",labelZh:"启用 Vision",labelEn:"flow",type:"bool_set",setValue:"xtls-rprx-vision",hint:"勾选后写入 flow=xtls-rprx-vision"}
+    ]
+  });
+
+  // TrojanUserObject
+  set("inbound.trojan.client", {
+    docUrl:"https://xtls.github.io/config/inbounds/trojan.html",
+    itemExample:{ password:"", level:0, email:"" },
+    fields:[
+      {key:"password",labelZh:"密码",labelEn:"password",type:"string"},
+      {key:"level",labelZh:"等级",labelEn:"level",type:"number"},
+      {key:"email",labelZh:"邮箱标识",labelEn:"email",type:"string",placeholder:"可选"}
+    ]
+  });
+
+  // ShadowsocksUserObject (multi-user)
+  set("inbound.shadowsocks.client", {
+    docUrl:"https://xtls.github.io/config/inbounds/shadowsocks.html",
+    itemExample:{ password:"", level:0, email:"" },
+    fields:[
+      {key:"password",labelZh:"密码",labelEn:"password",type:"string"},
+      {key:"level",labelZh:"等级",labelEn:"level",type:"number"},
+      {key:"email",labelZh:"邮箱标识",labelEn:"email",type:"string",placeholder:"可选"}
+    ]
+  });
+
+  // vmess inbound（clients 组件化）
   set("inbound.settings.vmess", {
     docUrl:"https://xtls.github.io/config/inbounds/vmess.html#inboundconfigurationobject",
     example:{ clients:[], default:{level:0}, disableInsecureEncryption:false },
     fields:[
-      {key:"clients",labelZh:"用户列表",labelEn:"clients",type:"json"},
+      {key:"clients",labelZh:"用户列表",labelEn:"clients",type:"array_object",ref:"inbound.vmess.client"},
       {key:"default",labelZh:"默认用户",labelEn:"default",type:"json"},
       {key:"disableInsecureEncryption",labelZh:"禁用不安全加密",labelEn:"disableInsecureEncryption",type:"bool"}
     ]
   });
 
-  // vless inbound（按常用字段）
+  // vless inbound（clients 组件化；flow 在 client 里勾选）
   set("inbound.settings.vless", {
     docUrl:"https://xtls.github.io/config/inbounds/vless.html",
-    example:{ clients:[], decryption:"none", fallbacks:[], flow:"", testseed:[] },
+    example:{ clients:[], decryption:"none", fallbacks:[], testseed:[] },
     fields:[
-      {key:"clients",labelZh:"用户列表",labelEn:"clients",type:"json"},
+      {key:"clients",labelZh:"用户列表",labelEn:"clients",type:"array_object",ref:"inbound.vless.client"},
       {key:"decryption",labelZh:"解密",labelEn:"decryption",type:"string"},
       {key:"fallbacks",labelZh:"Fallbacks",labelEn:"fallbacks",type:"json"},
-      {key:"flow",labelZh:"Flow",labelEn:"flow",type:"string"},
       {key:"testseed",labelZh:"TestSeed",labelEn:"testseed",type:"json"}
     ]
   });
@@ -69,7 +123,7 @@
     docUrl:"https://xtls.github.io/config/inbounds/trojan.html",
     example:{ clients:[], fallbacks:[] },
     fields:[
-      {key:"clients",labelZh:"用户列表",labelEn:"clients",type:"json"},
+      {key:"clients",labelZh:"用户列表",labelEn:"clients",type:"array_object",ref:"inbound.trojan.client"},
       {key:"fallbacks",labelZh:"Fallbacks",labelEn:"fallbacks",type:"json"}
     ]
   });
@@ -84,7 +138,7 @@
       {key:"level",labelZh:"等级",labelEn:"level",type:"number"},
       {key:"email",labelZh:"Email",labelEn:"email",type:"string"},
       {key:"network",labelZh:"网络",labelEn:"network",type:"string"},
-      {key:"clients",labelZh:"多用户（clients）",labelEn:"clients",type:"json"}
+      {key:"clients",labelZh:"多用户（clients）",labelEn:"clients",type:"array_object",ref:"inbound.shadowsocks.client"}
     ]
   });
 

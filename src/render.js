@@ -171,6 +171,20 @@ function renderJsonBox({labelZh,labelEn,docUrl,value,onInput,onBlur=null,errText
         nodes.push(renderText({ labelZh, labelEn, docUrl, value: curVal, placeholder: field.placeholder || "", onInput: (v) => commit(v), onBlur: () => onUIRefresh && onUIRefresh(), errText, dataPath }));
       } else if (field.type === "number") {
         nodes.push(renderNumber({ labelZh, labelEn, docUrl, value: curVal, placeholder: field.placeholder || "", onInput: (v) => commit(v), onBlur: () => onUIRefresh && onUIRefresh(), errText, dataPath }));
+      } else if (field.type === "bool_set") {
+        const setV = field.setValue;
+        const checked = (curVal === setV);
+        // 勾选 => 写入 setValue；取消 => 删除 key
+        nodes.push(wrapField(
+          fieldLabelHtml(labelZh, labelEn, docUrl),
+          `<label class="checkbox"><input type="checkbox" data-path="${U.escapeAttr(dataPath||"")}" ${checked ? "checked" : ""} /> <span>${U.escapeHtml(field.hint || "启用")}</span></label>`,
+          (root)=> root.querySelector("input").addEventListener("change", (e)=>{
+            if (e.target.checked) commit(setV);
+            else { delete obj[key]; onChange(); }
+            if (onUIRefresh) onUIRefresh();
+          }),
+          errText
+        ));
       } else if (field.type === "bool") {
         nodes.push(renderBool({ labelZh, labelEn, docUrl, value: !!curVal, onChange: (v) => { commit(v); if (onUIRefresh) onUIRefresh(); }, errText, dataPath }));
       } else if (field.type === "select") {
