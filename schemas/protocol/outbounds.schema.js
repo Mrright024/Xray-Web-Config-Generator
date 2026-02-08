@@ -21,7 +21,7 @@
     docUrl:"https://xtls.github.io/config/outbounds/freedom.html",
     example:{ domainStrategy:"AsIs", redirect:"", userLevel:0, noises:[] },
     fields:[
-      {key:"domainStrategy",labelZh:"域名策略",labelEn:"domainStrategy",type:"string"},
+      {key:"domainStrategy",labelZh:"域名策略",labelEn:"domainStrategy",type:"select",options:[{v:"AsIs",zh:"AsIs"},{v:"UseIP",zh:"UseIP"},{v:"UseIPv6v4",zh:"UseIPv6v4"},{v:"UseIPv6",zh:"UseIPv6"},{v:"UseIPv4v6",zh:"UseIPv4v6"},{v:"UseIPv4",zh:"UseIPv4"},{v:"ForceIP",zh:"ForceIP"},{v:"ForceIPv6v4",zh:"ForceIPv6v4"},{v:"ForceIPv6",zh:"ForceIPv6"},{v:"ForceIPv4v6",zh:"ForceIPv4v6"},{v:"ForceIPv4",zh:"ForceIPv4"}]},
       {key:"redirect",labelZh:"重定向",labelEn:"redirect",type:"string"},
       {key:"userLevel",labelZh:"等级",labelEn:"userLevel",type:"number"},
       {key:"noises",labelZh:"噪声",labelEn:"noises",type:"json"}

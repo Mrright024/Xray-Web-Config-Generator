@@ -98,10 +98,9 @@
   // vmess inbound（clients 组件化）
   set("inbound.settings.vmess", {
     docUrl:"https://xtls.github.io/config/inbounds/vmess.html#inboundconfigurationobject",
-    example:{ clients:[], default:{level:0}, disableInsecureEncryption:false },
+    example:{ clients:[], disableInsecureEncryption:false },
     fields:[
       {key:"clients",labelZh:"用户列表",labelEn:"clients",type:"array_object",ref:"inbound.vmess.client"},
-      {key:"default",labelZh:"默认用户",labelEn:"default",type:"json"},
       {key:"disableInsecureEncryption",labelZh:"禁用不安全加密",labelEn:"disableInsecureEncryption",type:"bool"}
     ]
   });

@@ -597,7 +597,7 @@ it.querySelector("[data-open]").addEventListener("click", () => {
 
   function divider() { const d = document.createElement("div"); d.className = "divider"; return d; }
 
-  function collapsibleCard({ title, body, actions, collapseKey, defaultCollapsed = false }) {
+  function collapsibleCard({ title, body, actions, collapseKey, defaultCollapsed = false, tagNote = "" }) {
     state.ui = state.ui || {};
     state.ui.collapse = state.ui.collapse || {};
 
@@ -621,6 +621,12 @@ it.querySelector("[data-open]").addEventListener("click", () => {
     };
 
     titleEl.prepend(icon);
+    if (tagNote) {
+      const tn = document.createElement("span");
+      tn.className = "tag-note";
+      tn.textContent = tagNote;
+      titleEl.appendChild(tn);
+    }
     apply();
 
     head.addEventListener("click", (e) => {
@@ -715,12 +721,12 @@ it.querySelector("[data-open]").addEventListener("click", () => {
         dataPath: `${base}.queryStrategy`,
         value: dns.queryStrategy ?? "",
         options: [
-          { v: "", zh: "（留空）" },
-          { v: "UseIP" },
-          { v: "UseIPv4" },
-          { v: "UseIPv6" },
-          { v: "AsIs" }
-        ],
+           { v: "", zh: "（留空）" },
+           { v: "UseIP" },
+           { v: "UseIPv4" },
+           { v: "UseIPv6" },
+           { v: "UseSystem" }
+         ],
         onChange: (v) => { dns.queryStrategy = v || undefined; if (!dns.queryStrategy) delete dns.queryStrategy; syncJsonFromObj(file); renderPreserveUI(); }
       }),
       R.renderText({
@@ -844,12 +850,12 @@ it.querySelector("[data-open]").addEventListener("click", () => {
         dataPath: `${base}.servers.${idx}.queryStrategy`,
         value: sv.queryStrategy ?? "",
         options: [
-          { v: "", zh: "（留空）" },
-          { v: "UseIP" },
-          { v: "UseIPv4" },
-          { v: "UseIPv6" },
-          { v: "AsIs" }
-        ],
+           { v: "", zh: "（留空）" },
+           { v: "UseIP" },
+           { v: "UseIPv4" },
+           { v: "UseIPv6" },
+           { v: "UseSystem" }
+         ],
         onChange: (v) => { sv.queryStrategy = v || undefined; if (!sv.queryStrategy) delete sv.queryStrategy; commitDnsServers(dns, strings, objects); syncJsonFromObj(file); renderPreserveUI(); }
       }));
       nodes.push(R.renderText({
@@ -968,7 +974,9 @@ it.querySelector("[data-open]").addEventListener("click", () => {
 
       // streamSettings：重点全字段覆盖（schema 驱动）
       const ssWrap = document.createElement("div"); ssWrap.style.gridColumn = "1 / -1";
-      ssWrap.appendChild(R.renderCard("传输层 streamSettings", R.renderBySchema({
+      ssWrap.appendChild(collapsibleCard({
+        title: "传输层 streamSettings",
+        body: R.renderBySchema({
         schemaId: "transport.streamSettings",
         obj: ib.streamSettings,
         rootObj: ib.streamSettings,
@@ -977,7 +985,10 @@ it.querySelector("[data-open]").addEventListener("click", () => {
         fileId: file.id,
         pathPrefix: `${pathPrefix}.${idx}.streamSettings`,
         errorMap
-      })));
+        }),
+        collapseKey: `${file.id}::inbounds::${idx}::streamSettings`,
+        defaultCollapsed: true
+      }));
       nodes.push(ssWrap);
 
       const actions = [
@@ -988,6 +999,7 @@ it.querySelector("[data-open]").addEventListener("click", () => {
 
       listWrap.appendChild(collapsibleCard({
         title: `入站 #${idx + 1}`,
+        tagNote: (ib.tag ? `（${ib.tag}）` : ""),
         body: R.renderFormGrid(nodes),
         actions,
         collapseKey: `${file.id}::inbounds::${idx}`,
@@ -1005,7 +1017,7 @@ it.querySelector("[data-open]").addEventListener("click", () => {
     header.style.display = "flex"; header.style.alignItems = "center"; header.style.justifyContent = "space-between";
     header.innerHTML = `<div style="font-weight:900">出站（outbounds）</div><div class="hint">数组 · 首元素通常为默认出口</div>`;
     header.appendChild(R.button("+ 添加出站", "btn small primary", () => {
-      list.push({ tag: `out-${list.length + 1}`, protocol: "freedom", settings: {}, streamSettings: {} });
+      list.push({ tag: `out-${list.length + 1}`, protocol: "freedom", settings: {} });
       syncJsonFromObj(file);
       renderPreserveUI();
     }));
@@ -1016,7 +1028,7 @@ it.querySelector("[data-open]").addEventListener("click", () => {
 
     list.forEach((ob, idx) => {
       ob.settings = ob.settings || {};
-      ob.streamSettings = ob.streamSettings || {};
+      if (["freedom","blackhole"].includes(ob.protocol || "freedom")) { delete ob.streamSettings; }
 
       const nodes = [];
       nodes.push(R.renderText({
@@ -1029,7 +1041,14 @@ it.querySelector("[data-open]").addEventListener("click", () => {
         labelZh: "协议", labelEn: "protocol", docUrl: X.state.DOC.outbound, value: ob.protocol || "freedom",
         dataPath: `${file.id}:${pathPrefix}.${idx}.protocol`,
         options: window.XraySchemas.get("protocol.outbounds")?.protocolOptions || [{ v: "freedom" }, { v: "blackhole" }, { v: "vmess" }, { v: "vless" }, { v: "trojan" }, { v: "shadowsocks" }, { v: "socks" }, { v: "http" }, { v: "loopback" }, { v: "wireguard" }].map(x => ({ v: x.v, zh: x.v })),
-        onChange: (v) => { ob.protocol = v; ob.settings = {}; syncJsonFromObj(file); renderPreserveUI(); }
+        onChange: (v) => {
+          ob.protocol = v;
+          ob.settings = {};
+          if (v === "freedom" || v === "blackhole") { delete ob.streamSettings; }
+          else { ob.streamSettings = ob.streamSettings || {}; }
+          syncJsonFromObj(file);
+          renderPreserveUI();
+        }
       }));
 
       // settings schema / JSON fallback
@@ -1065,9 +1084,13 @@ it.querySelector("[data-open]").addEventListener("click", () => {
         nodes.push(wrap);
       }
 
-      // streamSettings（全字段 schema）
-      const ssWrap = document.createElement("div"); ssWrap.style.gridColumn = "1 / -1";
-      ssWrap.appendChild(R.renderCard("传输层 streamSettings", R.renderBySchema({
+      // streamSettings（全字段 schema）——freedom / blackhole 不显示
+      if (ob.protocol !== "freedom" && ob.protocol !== "blackhole") {
+        ob.streamSettings = ob.streamSettings || {};
+        const ssWrap = document.createElement("div"); ssWrap.style.gridColumn = "1 / -1";
+        ssWrap.appendChild(collapsibleCard({
+          title: "传输层 streamSettings",
+          body: R.renderBySchema({
         schemaId: "transport.streamSettings",
         obj: ob.streamSettings,
         rootObj: ob.streamSettings,
@@ -1076,8 +1099,12 @@ it.querySelector("[data-open]").addEventListener("click", () => {
         fileId: file.id,
         pathPrefix: `${pathPrefix}.${idx}.streamSettings`,
         errorMap
-      })));
-      nodes.push(ssWrap);
+          }),
+          collapseKey: `${file.id}::outbounds::${idx}::streamSettings`,
+          defaultCollapsed: true
+        }));
+        nodes.push(ssWrap);
+      }
 
       const actions = [
         R.button("上移", "btn small", () => { if (idx > 0) { [list[idx - 1], list[idx]] = [list[idx], list[idx - 1]]; syncJsonFromObj(file); renderPreserveUI(); } }),
@@ -1086,6 +1113,7 @@ it.querySelector("[data-open]").addEventListener("click", () => {
       ];
       listWrap.appendChild(collapsibleCard({
         title: `出站 #${idx + 1}${idx === 0 ? "（默认）" : ""}`,
+        tagNote: (ob.tag ? `（${ob.tag}）` : ""),
         body: R.renderFormGrid(nodes),
         actions,
         collapseKey: `${file.id}::outbounds::${idx}`,

@@ -7,8 +7,6 @@
     example: {
       network: "tcp",
       security: "none",
-      address: "",
-      port: 0,
       tlsSettings: {},
       realitySettings: {},
       rawSettings: {},
@@ -37,8 +35,6 @@
         options:[{v:"none",zh:"none"},{v:"tls",zh:"tls"},{v:"reality",zh:"reality"}],
         docUrl:"https://xtls.github.io/config/transport.html#streamsettingsobject"
       },
-      { key:"address", labelZh:"目标地址", labelEn:"address", type:"string", placeholder:"（可选）", docUrl:"https://xtls.github.io/config/transport.html#streamsettingsobject" },
-      { key:"port", labelZh:"目标端口", labelEn:"port", type:"number", placeholder:"（可选）", docUrl:"https://xtls.github.io/config/transport.html#streamsettingsobject" },
 
       { key:"tlsSettings", labelZh:"TLS 配置", labelEn:"tlsSettings", type:"object", ref:"transport.tls",
         showIf:{path:"security", equals:"tls"},

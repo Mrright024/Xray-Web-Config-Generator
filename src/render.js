@@ -128,6 +128,35 @@ function renderJsonBox({labelZh,labelEn,docUrl,value,onInput,onBlur=null,errText
     return card;
   }
 
+
+  function makeCardCollapsible(card, defaultCollapsed=true) {
+    if (!card) return;
+    card.classList.add("collapsible");
+    const head = card.querySelector(".card-head");
+    const titleEl = card.querySelector(".card-title");
+    if (!head || !titleEl) return;
+
+    const icon = document.createElement("span");
+    icon.className = "collapse-icon";
+
+    // default collapsed
+    if (defaultCollapsed) card.classList.add("collapsed");
+
+    const apply = () => {
+      const collapsed = card.classList.contains("collapsed");
+      icon.textContent = collapsed ? "▸" : "▾";
+    };
+
+    titleEl.prepend(icon);
+    apply();
+
+    head.addEventListener("click", (e) => {
+      if (e.target.closest("button") || e.target.closest("a") || e.target.closest("input") || e.target.closest("select") || e.target.closest("textarea")) return;
+      card.classList.toggle("collapsed");
+      apply();
+    });
+  }
+
   function button(text, cls, onClick) {
     const b = document.createElement("button");
     b.type = "button";
@@ -205,7 +234,11 @@ function renderJsonBox({labelZh,labelEn,docUrl,value,onInput,onBlur=null,errText
         });
         const wrap = document.createElement("div");
         wrap.style.gridColumn = "1 / -1";
-        wrap.appendChild(renderCard(`${labelZh}（${labelEn}）`, childNode));
+        const childCard = renderCard(`${labelZh}（${labelEn}）`, childNode);
+        if (schemaId === "transport.streamSettings") {
+          makeCardCollapsible(childCard, true);
+        }
+        wrap.appendChild(childCard);
         nodes.push(wrap);
       } else if (field.type === "array_object") {
         const arr = Array.isArray(curVal) ? curVal : (obj[key] = []);
