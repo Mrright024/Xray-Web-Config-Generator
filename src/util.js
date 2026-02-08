@@ -59,11 +59,51 @@
   // - Removes undefined/null/"" values
   // - Removes empty objects/arrays recursively
   // - Strips some known default values (loglevel=warning, routing.domainStrategy=AsIs)
+  X.util.deepEqual = (a, b) => {
+    if (a === b) return true;
+    if (typeof a !== typeof b) return false;
+    if (a === null || b === null) return a === b;
+    if (Array.isArray(a)) {
+      if (!Array.isArray(b) || a.length !== b.length) return false;
+      for (let i = 0; i < a.length; i++) if (!X.util.deepEqual(a[i], b[i])) return false;
+      return true;
+    }
+    if (X.util.isPlainObject(a)) {
+      if (!X.util.isPlainObject(b)) return false;
+      const ka = Object.keys(a), kb = Object.keys(b);
+      if (ka.length !== kb.length) return false;
+      for (const k of ka) {
+        if (!Object.prototype.hasOwnProperty.call(b, k)) return false;
+        if (!X.util.deepEqual(a[k], b[k])) return false;
+      }
+      return true;
+    }
+    return false;
+  };
+
+  X.util.orderRootKeys = (o) => {
+    if (!X.util.isPlainObject(o)) return o;
+    const order = [
+      "log","api","dns","routing","policy",
+      "inbounds","outbounds",
+      "transport","stats","reverse",
+      "fakedns","observatory","burstObservatory"
+    ];
+    const out = {};
+    for (const k of order) if (Object.prototype.hasOwnProperty.call(o, k)) out[k] = o[k];
+    for (const k of Object.keys(o)) if (!Object.prototype.hasOwnProperty.call(out, k)) out[k] = o[k];
+    return out;
+  };
+
   X.util.pruneConfig = (obj) => {
     const U = X.util;
 
     const prune = (v) => {
-      if (v === undefined || v === null || v === "") return undefined;
+      if (v === undefined || v === null) return undefined;
+      if (typeof v === "string") {
+        const s = v.trim();
+        return s ? s : undefined;
+      }
       if (Array.isArray(v)) {
         const a = v.map(prune).filter(x => x !== undefined);
         return a.length ? a : undefined;
@@ -79,41 +119,78 @@
       return v;
     };
 
-    const stripDefaults = (o) => {
-      if (!U.isPlainObject(o)) return o;
-
-      // log defaults
-      if (U.isPlainObject(o.log)) {
-        if (o.log.loglevel === "warning") delete o.log.loglevel;
-        if (Object.keys(o.log).length === 0) delete o.log;
+    const stripByExample = (target, example) => {
+      if (!U.isPlainObject(target) || !U.isPlainObject(example)) return;
+      for (const [k, dv] of Object.entries(example)) {
+        if (!Object.prototype.hasOwnProperty.call(target, k)) continue;
+        const tv = target[k];
+        if (U.deepEqual(tv, dv)) {
+          delete target[k];
+        } else {
+          if (U.isPlainObject(tv) && U.isPlainObject(dv)) stripByExample(tv, dv);
+          if (Array.isArray(tv) && Array.isArray(dv) && dv.length === 0) {
+            // 默认是空数组时，不强行删非空数组（用户填了就保留）
+          }
+        }
       }
-
-      // routing defaults
-      if (U.isPlainObject(o.routing)) {
-        if (o.routing.domainStrategy === "AsIs") delete o.routing.domainStrategy;
-        if (Array.isArray(o.routing.rules) && o.routing.rules.length === 0) delete o.routing.rules;
-        if (Array.isArray(o.routing.balancers) && o.routing.balancers.length === 0) delete o.routing.balancers;
-        if (Object.keys(o.routing).length === 0) delete o.routing;
-      }
-
-      // dns: drop empty dns
-      if (U.isPlainObject(o.dns)) {
-        // empty hosts object should already be pruned
-        if (Object.keys(o.dns).length === 0) delete o.dns;
-      }
-
-      // inbounds/outbounds: drop empty arrays
-      if (Array.isArray(o.inbounds) && o.inbounds.length === 0) delete o.inbounds;
-      if (Array.isArray(o.outbounds) && o.outbounds.length === 0) delete o.outbounds;
-
-      return o;
     };
 
-    const cloned = U.deepClone(obj ?? {});
-    const pruned = prune(cloned);
-    const stripped = stripDefaults(pruned || {});
-    const final = prune(stripped) || {};
-    return final;
+    const stripWithSchema = (target, schemaId) => {
+      if (!U.isPlainObject(target)) return;
+      const sch = window.XraySchemas?.get?.(schemaId);
+      if (!sch) return;
+      if (U.isPlainObject(sch.example)) stripByExample(target, sch.example);
+      if (Array.isArray(sch.fields)) {
+        for (const f of sch.fields) {
+          const key = f.key;
+          if (!key) continue;
+          if (f.type === "object" && f.ref && U.isPlainObject(target[key])) {
+            stripWithSchema(target[key], f.ref);
+          }
+          if (f.type === "array_object" && f.ref && Array.isArray(target[key])) {
+            target[key].forEach(item => { if (U.isPlainObject(item)) stripWithSchema(item, f.ref); });
+          }
+        }
+      }
+    };
+
+    const root = U.deepClone(obj ?? {});
+    let pruned = prune(root) || {};
+
+    // ==== schema-driven default stripping (aggressive) ====
+    // inbounds
+    if (Array.isArray(pruned.inbounds)) {
+      pruned.inbounds.forEach(ib => {
+        if (!U.isPlainObject(ib)) return;
+        if (U.isPlainObject(ib.streamSettings)) stripWithSchema(ib.streamSettings, "transport.streamSettings");
+        const sid = ib.protocol ? `inbound.settings.${ib.protocol}` : "";
+        if (sid && U.isPlainObject(ib.settings) && window.XraySchemas?.get?.(sid)) stripWithSchema(ib.settings, sid);
+      });
+    }
+
+    // outbounds
+    if (Array.isArray(pruned.outbounds)) {
+      pruned.outbounds.forEach(ob => {
+        if (!U.isPlainObject(ob)) return;
+        if (U.isPlainObject(ob.streamSettings)) stripWithSchema(ob.streamSettings, "transport.streamSettings");
+        const sid = ob.protocol ? `outbound.settings.${ob.protocol}` : "";
+        if (sid && U.isPlainObject(ob.settings) && window.XraySchemas?.get?.(sid)) stripWithSchema(ob.settings, sid);
+      });
+    }
+
+    // root defaults（常见模块）
+    if (U.isPlainObject(pruned.log)) {
+      if (pruned.log.loglevel === "warning") delete pruned.log.loglevel;
+    }
+    if (U.isPlainObject(pruned.routing)) {
+      if (pruned.routing.domainStrategy === "AsIs") delete pruned.routing.domainStrategy;
+      if (Array.isArray(pruned.routing.rules) && pruned.routing.rules.length === 0) delete pruned.routing.rules;
+      if (Array.isArray(pruned.routing.balancers) && pruned.routing.balancers.length === 0) delete pruned.routing.balancers;
+    }
+
+    pruned = prune(pruned) || {};
+    pruned = U.orderRootKeys(pruned) || {};
+    return pruned;
   };
 
 })();

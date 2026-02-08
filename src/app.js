@@ -668,13 +668,22 @@ it.querySelector("[data-open]").addEventListener("click", () => {
         value: !!log.dnsLog,
         onChange: (v) => { log.dnsLog = v ? true : undefined; if (!log.dnsLog) delete log.dnsLog; syncJsonFromObj(file); renderPreserveUI(); }
       }),
-      R.renderText({
+      R.renderSelect({
         labelZh: "IP地址遮罩", labelEn: "maskAddress", docUrl: "https://xtls.github.io/config/log.html",
         dataPath: `${base}.maskAddress`,
         value: log.maskAddress ?? "",
-        placeholder: "例如 quarter / half / full 或 /16+/32（可选）",
-        onBlur: () => scheduleRender(),
-        onInput: (v) => { log.maskAddress = (v || undefined); if (!log.maskAddress) delete log.maskAddress; syncJsonFromObj(file); }
+        options: [
+          { v: "", zh: "（不设置）" },
+          { v: "quarter", zh: "quarter" },
+          { v: "half", zh: "half" },
+          { v: "full", zh: "full" }
+        ],
+        onChange: (v) => {
+          if (!v) delete log.maskAddress;
+          else log.maskAddress = v;
+          syncJsonFromObj(file);
+          renderPreserveUI();
+        }
       })
     ]));
   }
@@ -1255,8 +1264,28 @@ if (balEl && outEl && outEl.value) { balEl.disabled = true; }
   }
 
   // ===== 下载门禁：发现错误 → 弹窗允许取消或继续 =====
-  function gateDownload(doDownload) {
+    function gateDownload(doDownload) {
     const res = V.validateAll(state);
+
+    // JSON 解析错误也纳入下载前提示
+    const parseErrs = [];
+    const filenameFor = (f) => {
+      if (state.mode === "single") return "config.json";
+      const filesOfPart = state.files.filter(x => x.part === f.part);
+      const idx = filesOfPart.findIndex(x => x.id === f.id);
+      return ST.computeFileName(f.part, idx + 1, filesOfPart.length, f.suffix);
+    };
+
+    if (state.mode === "single") {
+      if (state.single.parseError) {
+        parseErrs.push({ where: "单文件 config.json", message: state.single.parseError });
+      }
+    } else {
+      state.files.forEach(f => {
+        if (f.parseError) parseErrs.push({ where: filenameFor(f), message: f.parseError });
+      });
+    }
+
     const disclaimer = `
       <div class="okbox">
         <div style="font-weight:900;margin-bottom:6px">重要提示</div>
@@ -1269,27 +1298,45 @@ if (balEl && outEl && outEl.value) { balEl.disabled = true; }
     let continueText = "继续下载";
     let continueClass = "btn primary";
 
-    if (res.hasError) {
+    const hasAnyError = res.hasError || parseErrs.length > 0;
+
+    if (hasAnyError) {
       title = "下载前提示：发现问题";
       continueText = "仍然下载";
       continueClass = "btn danger";
-      const list = res.errs.slice(0, 50).map(e => `<li><span class="mono">${U.escapeHtml(e.path)}</span>：${U.escapeHtml(e.message)}</li>`).join("");
-      html += `
-        <div class="divider"></div>
-        <div class="errbox">
-          <div style="font-weight:900;margin-bottom:6px">校验未通过</div>
-          <div class="smallnote">${U.escapeHtml(res.summary)}</div>
-        </div>
-        <div class="divider"></div>
-        <div style="font-weight:800;margin-bottom:6px">错误明细（最多显示 50 条）</div>
-        <ul style="margin:0;padding-left:18px">${list}</ul>
-      `;
+
+      if (parseErrs.length) {
+        const plist = parseErrs.slice(0, 20).map(e => `<li><span class="mono">${U.escapeHtml(e.where)}</span>：${U.escapeHtml(e.message)}</li>`).join("");
+        html += `
+          <div class="divider"></div>
+          <div class="errbox">
+            <div style="font-weight:900;margin-bottom:6px">JSON 解析失败</div>
+            <div class="smallnote">以下文件存在 JSON 语法错误（最多显示 20 条）。你可以继续下载，但配置将很可能无法运行。</div>
+          </div>
+          <div class="divider"></div>
+          <ul style="margin:0;padding-left:18px">${plist}</ul>
+        `;
+      }
+
+      if (res.hasError) {
+        const list = res.errs.slice(0, 50).map(e => `<li><span class="mono">${U.escapeHtml(e.path)}</span>：${U.escapeHtml(e.message)}</li>`).join("");
+        html += `
+          <div class="divider"></div>
+          <div class="errbox">
+            <div style="font-weight:900;margin-bottom:6px">表单校验未通过</div>
+            <div class="smallnote">${U.escapeHtml(res.summary)}</div>
+          </div>
+          <div class="divider"></div>
+          <div style="font-weight:800;margin-bottom:6px">错误明细（最多显示 50 条）</div>
+          <ul style="margin:0;padding-left:18px">${list}</ul>
+        `;
+      }
     } else {
       html += `
         <div class="divider"></div>
         <div class="okbox">
           <div style="font-weight:900;margin-bottom:6px">未发现已覆盖范围内的格式错误</div>
-          <div class="smallnote">你仍然可以继续下载；如遇运行问题，请优先对照文档与日志排查。</div>
+          <div class="smallnote">仍建议在实际环境中结合文档与日志验证运行结果。</div>
         </div>
       `;
     }

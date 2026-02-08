@@ -368,6 +368,41 @@ function renderJsonBox({labelZh,labelEn,docUrl,value,onInput,onBlur=null,errText
         updateGutter();
         if (onInput) onInput(ta.value);
       }
+
+      if (e.key === "Enter") {
+        e.preventDefault();
+        const indentUnit = "  ";
+        const v = ta.value;
+        const start = ta.selectionStart ?? 0;
+        const end = ta.selectionEnd ?? start;
+
+        const lineStart = v.lastIndexOf("\n", start - 1) + 1;
+        const beforeLine = v.slice(lineStart, start);
+        const baseIndent = (beforeLine.match(/^[ \t]*/) || [""])[0];
+
+        const beforeTrim = beforeLine.trimEnd();
+        const after = v.slice(end);
+        const nextToken = (after.match(/^\s*([}\]])/) || [])[1];
+
+        const shouldIndent = beforeTrim.endsWith("{") || beforeTrim.endsWith("[");
+        const indent = baseIndent + (shouldIndent ? indentUnit : "");
+
+        if (shouldIndent && nextToken) {
+          // {<cursor> }  =>  {\n  <cursor>\n}
+          const text = "\n" + indent + "\n" + baseIndent;
+          ta.value = v.slice(0, start) + text + v.slice(end);
+          const pos = start + 1 + indent.length;
+          ta.setSelectionRange(pos, pos);
+        } else {
+          ta.value = v.slice(0, start) + "\n" + indent + v.slice(end);
+          const pos = start + 1 + indent.length;
+          ta.setSelectionRange(pos, pos);
+        }
+
+        updateGutter();
+        if (onInput) onInput(ta.value);
+        return;
+      }
     });
 
     ta.addEventListener("input", () => {
