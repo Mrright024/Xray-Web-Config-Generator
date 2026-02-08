@@ -70,29 +70,59 @@
   // trojan outbound
   set("outbound.settings.trojan", {
     docUrl:"https://xtls.github.io/config/outbounds/trojan.html",
-    example:{ servers:[] },
-    fields:[ {key:"servers",labelZh:"服务器列表",labelEn:"servers",type:"json"} ]
+    example:{ address:"", port:0, password:"", email:"", level:0 },
+    fields:[
+      {key:"address",labelZh:"服务器地址",labelEn:"address",type:"string"},
+      {key:"port",labelZh:"服务器端口",labelEn:"port",type:"number"},
+      {key:"password",labelZh:"密码",labelEn:"password",type:"string"},
+      {key:"email",labelZh:"邮箱标识",labelEn:"email",type:"string"},
+      {key:"level",labelZh:"等级",labelEn:"level",type:"number"}
+    ]
   });
 
   // shadowsocks outbound
   set("outbound.settings.shadowsocks", {
     docUrl:"https://xtls.github.io/config/outbounds/shadowsocks.html",
-    example:{ servers:[] },
-    fields:[ {key:"servers",labelZh:"服务器列表",labelEn:"servers",type:"json"} ]
+    example:{ email:"", address:"", port:0, method:"", password:"", uot:false, UoTVersion:0, level:0 },
+    fields:[
+      {key:"email",labelZh:"邮箱标识",labelEn:"email",type:"string"},
+      {key:"address",labelZh:"服务器地址",labelEn:"address",type:"string"},
+      {key:"port",labelZh:"服务器端口",labelEn:"port",type:"number"},
+      {key:"method",labelZh:"加密方法",labelEn:"method",type:"string",placeholder:"如 aes-128-gcm / 2022-blake3-aes-256-gcm"},
+      {key:"password",labelZh:"密码",labelEn:"password",type:"string"},
+      {key:"uot",labelZh:"启用 UoT",labelEn:"uot",type:"bool"},
+      {key:"UoTVersion",labelZh:"UoT 版本",labelEn:"UoTVersion",type:"number",placeholder:"可选：1 或 2",showIf:{path:"uot",equals:true}},
+      {key:"level",labelZh:"等级",labelEn:"level",type:"number"}
+    ]
   });
 
   // socks outbound
   set("outbound.settings.socks", {
     docUrl:"https://xtls.github.io/config/outbounds/socks.html",
-    example:{ servers:[] },
-    fields:[ {key:"servers",labelZh:"服务器列表",labelEn:"servers",type:"json"} ]
+    example:{ address:"", port:0, user:"", pass:"", level:0, email:"" },
+    fields:[
+      {key:"address",labelZh:"服务器地址",labelEn:"address",type:"string"},
+      {key:"port",labelZh:"服务器端口",labelEn:"port",type:"number"},
+      {key:"user",labelZh:"用户名",labelEn:"user",type:"string",placeholder:"如需认证则填写"},
+      {key:"pass",labelZh:"密码",labelEn:"pass",type:"string",placeholder:"如需认证则填写"},
+      {key:"level",labelZh:"等级",labelEn:"level",type:"number"},
+      {key:"email",labelZh:"邮箱标识",labelEn:"email",type:"string"}
+    ]
   });
 
   // http outbound
   set("outbound.settings.http", {
     docUrl:"https://xtls.github.io/config/outbounds/http.html",
-    example:{ servers:[] },
-    fields:[ {key:"servers",labelZh:"服务器列表",labelEn:"servers",type:"json"} ]
+    example:{ address:"", port:0, user:"", pass:"", level:0, email:"", headers:{} },
+    fields:[
+      {key:"address",labelZh:"代理地址",labelEn:"address",type:"string"},
+      {key:"port",labelZh:"代理端口",labelEn:"port",type:"number"},
+      {key:"user",labelZh:"用户名",labelEn:"user",type:"string",placeholder:"如需认证则填写"},
+      {key:"pass",labelZh:"密码",labelEn:"pass",type:"string",placeholder:"如需认证则填写"},
+      {key:"level",labelZh:"等级",labelEn:"level",type:"number"},
+      {key:"email",labelZh:"邮箱标识",labelEn:"email",type:"string"},
+      {key:"headers",labelZh:"请求头",labelEn:"headers",type:"json"}
+    ]
   });
 
   // loopback outbound

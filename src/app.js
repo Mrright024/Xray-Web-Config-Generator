@@ -1028,6 +1028,23 @@ it.querySelector("[data-open]").addEventListener("click", () => {
 
     list.forEach((ob, idx) => {
       ob.settings = ob.settings || {};
+      // legacy migration: old schemas used settings.servers[] for these protocols
+      if (ob && ob.settings && Array.isArray(ob.settings.servers) && ob.settings.servers.length &&
+          ["trojan","shadowsocks","socks","http"].includes(ob.protocol || "")) {
+        const first = ob.settings.servers[0];
+        if (U.isPlainObject(first)) {
+          const keys = (ob.protocol === "shadowsocks")
+            ? ["email","address","port","method","password","uot","UoTVersion","level"]
+            : (ob.protocol === "http")
+              ? ["address","port","user","pass","level","email","headers"]
+              : (ob.protocol === "socks")
+                ? ["address","port","user","pass","level","email"]
+                : ["address","port","password","email","level"];
+          keys.forEach(k => { if (first[k] !== undefined) ob.settings[k] = first[k]; });
+        }
+        delete ob.settings.servers;
+      }
+
       if (["freedom","blackhole"].includes(ob.protocol || "freedom")) { delete ob.streamSettings; }
 
       const nodes = [];
