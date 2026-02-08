@@ -1242,6 +1242,7 @@ if (balEl && outEl && outEl.value) { balEl.disabled = true; }
         placeholder: "每行一条，如 geoip:cn / 10.0.0.0/8 / ::/0",
         dataPath: `${file.id}:${pathPrefix}.rules.${idx}.ip`,
         errText: V.getError(errorMap, file.id, `${pathPrefix}.rules.${idx}.ip`),
+        onBlur: () => scheduleRender(),
         onChange: (arr) => { r.ip = arr; if (!arr) delete r.ip; syncJsonFromObj(file); }
       }));
 

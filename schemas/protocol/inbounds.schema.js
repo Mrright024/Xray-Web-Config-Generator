@@ -21,7 +21,7 @@
     example:{ auth:"noauth", accounts:[], udp:false, ip:"127.0.0.1", userLevel:0 },
     fields:[
       {key:"auth",labelZh:"认证方式",labelEn:"auth",type:"select",options:[{v:"noauth",zh:"noauth"},{v:"password",zh:"password"}]},
-      {key:"accounts",labelZh:"账号列表",labelEn:"accounts",type:"json"},
+      {key:"accounts",labelZh:"账号列表",labelEn:"accounts",type:"array_object",ref:"inbound.socks.account",showIf:{path:"settings.auth",equals:"password"}},
       {key:"udp",labelZh:"UDP 支持",labelEn:"udp",type:"bool"},
       {key:"ip",labelZh:"本地 IP",labelEn:"ip",type:"string"},
       {key:"userLevel",labelZh:"用户等级",labelEn:"userLevel",type:"number"}
@@ -33,12 +33,34 @@
     docUrl:"https://xtls.github.io/config/inbounds/http.html",
     example:{ accounts:[], allowTransparent:false, timeout:0, userLevel:0 },
     fields:[
-      {key:"accounts",labelZh:"账号列表",labelEn:"accounts",type:"json"},
+      {key:"accounts",labelZh:"账号列表",labelEn:"accounts",type:"array_object",ref:"inbound.http.account"},
       {key:"allowTransparent",labelZh:"透明代理",labelEn:"allowTransparent",type:"bool"},
       {key:"timeout",labelZh:"超时",labelEn:"timeout",type:"number"},
       {key:"userLevel",labelZh:"用户等级",labelEn:"userLevel",type:"number"}
     ]
   });
+  // ============ AccountObject schemas (component-style accounts) ============
+  // HTTPAccountObject
+  set("inbound.http.account", {
+    docUrl:"https://xtls.github.io/config/inbounds/http.html",
+    itemExample:{ user:"", pass:"" },
+    fields:[
+      {key:"user",labelZh:"用户名",labelEn:"user",type:"string"},
+      {key:"pass",labelZh:"密码",labelEn:"pass",type:"string"}
+    ]
+  });
+
+  // SocksAccountObject
+  set("inbound.socks.account", {
+    docUrl:"https://xtls.github.io/config/inbounds/socks.html",
+    itemExample:{ user:"", pass:"" },
+    fields:[
+      {key:"user",labelZh:"用户名",labelEn:"user",type:"string"},
+      {key:"pass",labelZh:"密码",labelEn:"pass",type:"string"}
+    ]
+  });
+
+
 
   // ============ ClientObject schemas (component-style clients) ============
   // VMessUserObject

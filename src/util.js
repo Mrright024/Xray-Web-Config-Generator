@@ -163,6 +163,9 @@
       pruned.inbounds.forEach(ib => {
         if (!U.isPlainObject(ib)) return;
         if (U.isPlainObject(ib.streamSettings)) stripWithSchema(ib.streamSettings, "transport.streamSettings");
+        if (ib.protocol === "socks" && U.isPlainObject(ib.settings)) {
+          if (ib.settings.auth !== "password") delete ib.settings.accounts;
+        }
         const sid = ib.protocol ? `inbound.settings.${ib.protocol}` : "";
         if (sid && U.isPlainObject(ib.settings) && window.XraySchemas?.get?.(sid)) stripWithSchema(ib.settings, sid);
       });
