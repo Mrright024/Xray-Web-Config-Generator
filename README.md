@@ -26,17 +26,6 @@ Live version: [https://xray-config.waku.icu](https://xray-config.waku.icu)
   - Sidebar auto-hides on screens < 480px
   - Use desktop version for optimal experience
 
-## Local Development
-
-```bash
-# No build step needed - just serve with any HTTP server
-python -m http.server 8080
-# or
-npx http-server .
-```
-
-Then open http://localhost:8080
-
 ## Technical Details
 
 - **Frontend**: Vanilla HTML/CSS/JavaScript (no dependencies)
