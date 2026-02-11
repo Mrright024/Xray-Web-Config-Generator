@@ -9,6 +9,7 @@
 
   const elModeSingle = document.getElementById("modeSingle");
   const elModeMulti = document.getElementById("modeMulti");
+  const elBtnToggleSidebar = document.getElementById("btnToggleSidebar");
   const elBtnDocs = document.getElementById("btnDocs");
   const elBtnDownloadActive = document.getElementById("btnDownloadActive");
   const elBtnDownloadAll = document.getElementById("btnDownloadAll");
@@ -18,6 +19,8 @@
   const elParseDot = document.getElementById("parseDot");
   const elParseText = document.getElementById("parseText");
   const elTabMerge = document.getElementById("tabMerge");
+  const elAside = document.querySelector("aside");
+  const elSidebarBackdrop = document.getElementById("sidebarBackdrop");
 
   const elBtnAddRoutingFile = document.getElementById("btnAddRoutingFile");
   const elBtnAddInboundFile = document.getElementById("btnAddInboundFile");
@@ -1403,6 +1406,19 @@ if (balEl && outEl && outEl.value) { balEl.disabled = true; }
       save(); scheduleRender();
     });
   });
+
+  function openSidebar() {
+    elAside.classList.add("sidebar-open");
+    elSidebarBackdrop.classList.add("show");
+  }
+
+  function closeSidebar() {
+    elAside.classList.remove("sidebar-open");
+    elSidebarBackdrop.classList.remove("show");
+  }
+
+  elBtnToggleSidebar.addEventListener("click", openSidebar);
+  elSidebarBackdrop.addEventListener("click", closeSidebar);
 
   elModeSingle.addEventListener("click", () => {
     state.mode = "single";

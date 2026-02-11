@@ -6,6 +6,12 @@
 
   X.render = X.render || {};
 
+  // Generate unique ID for form controls
+  let __idCounter = 0;
+  function genId(prefix = "field") {
+    return `${prefix}-${++__idCounter}`;
+  }
+
   function fieldLabelHtml(zh, en, docUrl) {
     const safeZh = U.escapeHtml(zh);
     const safeEn = U.escapeHtml(en);
@@ -13,32 +19,55 @@
     return `<span class="linklabel">${a}</span> <span class="muted">(${safeEn})</span>`;
   }
 
-  function wrapField(labelHtml, controlHtml, bindFn, errText) {
+  function wrapField(labelHtml, controlHtml, bindFn, errText, fieldId) {
     const root = document.createElement("div");
     root.className = "field" + (errText ? " field-error" : "");
-    root.innerHTML = `<label>${labelHtml}</label>${controlHtml}${errText ? `<div class="field-errtext">${U.escapeHtml(errText)}</div>` : ""}`;
+    const errorId = fieldId ? `${fieldId}-error` : "";
+    const labelWithId = labelHtml.replace("<label>", `<label for="${U.escapeAttr(fieldId || "")}">`) || `<label for="${U.escapeAttr(fieldId || "")}"></label>`;
+    const errorMarkup = errText ? `<div class="field-errtext" id="${U.escapeAttr(errorId)}" role="alert">${U.escapeHtml(errText)}</div>` : "";
+    const ariaDescribedBy = errText ? ` aria-describedby="${U.escapeAttr(errorId)}"` : "";
+    
+    // Insert fieldId into controlHtml
+    const controlWithId = controlHtml.replace(
+      /type="(checkbox|radio)"/,
+      (match) => `id="${U.escapeAttr(fieldId || "")}" ${match}`
+    ).replace(
+      /(<input[^>]*?)(?!id=)/,
+      (match) => `${match}${fieldId && !match.includes('id=') ? ` id="${U.escapeAttr(fieldId)}"` : ""}`
+    ).replace(
+      /(<select[^>]*?)(?!id=)/,
+      (match) => `${match}${fieldId && !match.includes('id=') ? ` id="${U.escapeAttr(fieldId)}"` : ""}`
+    ).replace(
+      /(<textarea[^>]*?)(?!id=)/,
+      (match) => `${match}${fieldId && !match.includes('id=') ? ` id="${U.escapeAttr(fieldId)}"` : ""}`
+    );
+    
+    root.innerHTML = labelWithId + controlWithId.replace(/(\s*\/>|>)/, ariaDescribedBy + "$1") + errorMarkup;
     if (bindFn) bindFn(root);
     return root;
   }
 
   function renderText({labelZh,labelEn,docUrl,value,placeholder,onInput,onBlur=null,disabled=false,errText="", dataPath=""}){
+  const fieldId = genId("text");
   return wrapField(
     fieldLabelHtml(labelZh,labelEn,docUrl),
-    `<input type="text" data-path="${U.escapeAttr(dataPath||"")}" ${disabled?"disabled":""} value="${U.escapeAttr(value ?? "")}" placeholder="${U.escapeAttr(placeholder||"")}" />`,
+    `<input type="text" data-path="${U.escapeAttr(dataPath||"")}" ${disabled?"disabled":""} value="${U.escapeAttr(value ?? "")}" placeholder="${U.escapeAttr(placeholder||"")}" aria-invalid="${errText ? "true" : "false"}" />`,
     (root)=>{
       const el = root.querySelector("input");
       el.addEventListener("input", e => onInput(e.target.value));
       if (onBlur) el.addEventListener("blur", () => onBlur());
     },
-    errText
+    errText,
+    fieldId
   );
 }
 
 function renderNumber({labelZh,labelEn,docUrl,value,placeholder,onInput,onBlur=null,errText="", dataPath=""}){
   const v = (value === undefined || value === null || value === "") ? "" : String(value);
+  const fieldId = genId("number");
   return wrapField(
     fieldLabelHtml(labelZh,labelEn,docUrl),
-    `<input type="number" data-path="${U.escapeAttr(dataPath||"")}" value="${U.escapeAttr(v)}" placeholder="${U.escapeAttr(placeholder||"")}" />`,
+    `<input type="number" data-path="${U.escapeAttr(dataPath||"")}" value="${U.escapeAttr(v)}" placeholder="${U.escapeAttr(placeholder||"")}" aria-invalid="${errText ? "true" : "false"}" />`,
     (root)=>{
       const el = root.querySelector("input");
       el.addEventListener("input", e => {
@@ -47,35 +76,41 @@ function renderNumber({labelZh,labelEn,docUrl,value,placeholder,onInput,onBlur=n
       });
       if (onBlur) el.addEventListener("blur", () => onBlur());
     },
-    errText
+    errText,
+    fieldId
   );
 }
 
 function renderSelect({labelZh,labelEn,docUrl,value,options,onChange,errText="", dataPath=""}){
   const opts = (options||[]).map(o => `<option value="${U.escapeAttr(o.v)}"${o.v===value?" selected":""}>${U.escapeHtml(o.zh ?? o.v)}</option>`).join("");
+  const fieldId = genId("select");
   return wrapField(
     fieldLabelHtml(labelZh,labelEn,docUrl),
-    `<select data-path="${U.escapeAttr(dataPath||"")}">${opts}</select>`,
+    `<select data-path="${U.escapeAttr(dataPath||"")}" aria-invalid="${errText ? "true" : "false"}">${opts}</select>`,
     (root)=> root.querySelector("select").addEventListener("change", e => onChange(e.target.value)),
-    errText
+    errText,
+    fieldId
   );
 }
 
 function renderBool({labelZh,labelEn,docUrl,value,onChange,errText="", dataPath=""}){
   const checked = value ? "checked" : "";
+  const fieldId = genId("bool");
   return wrapField(
     fieldLabelHtml(labelZh,labelEn,docUrl),
     `<label class="checkbox"><input type="checkbox" data-path="${U.escapeAttr(dataPath||"")}" ${checked} /> <span>启用</span></label>`,
     (root)=> root.querySelector("input").addEventListener("change", e => onChange(!!e.target.checked)),
-    errText
+    errText,
+    fieldId
   );
 }
 
 function renderStringLines({labelZh,labelEn,docUrl,value,placeholder,onChange,onBlur=null,errText="", dataPath=""}){
   const text = Array.isArray(value) ? value.join("\n") : "";
+  const fieldId = genId("stringlines");
   return wrapField(
     fieldLabelHtml(labelZh,labelEn,docUrl),
-    `<textarea data-path="${U.escapeAttr(dataPath||"")}" placeholder="${U.escapeAttr(placeholder||"每行一条")}">${U.escapeHtml(text)}</textarea>`,
+    `<textarea data-path="${U.escapeAttr(dataPath||"")}" placeholder="${U.escapeAttr(placeholder||"每行一条")}" aria-invalid="${errText ? "true" : "false"}">${U.escapeHtml(text)}</textarea>`,
     (root)=>{
       const el = root.querySelector("textarea");
       el.addEventListener("input", e => {
@@ -84,21 +119,24 @@ function renderStringLines({labelZh,labelEn,docUrl,value,placeholder,onChange,on
       });
       if (onBlur) el.addEventListener("blur", () => onBlur());
     },
-    errText
+    errText,
+    fieldId
   );
 }
 
 function renderJsonBox({labelZh,labelEn,docUrl,value,onInput,onBlur=null,errText="", dataPath=""}){
   const text = value ? U.stringifyJsonClean(value) : "{}";
+  const fieldId = genId("jsonbox");
   return wrapField(
     fieldLabelHtml(labelZh,labelEn,docUrl),
-    `<textarea data-path="${U.escapeAttr(dataPath||"")}" spellcheck="false">${U.escapeHtml(text)}</textarea>`,
+    `<textarea data-path="${U.escapeAttr(dataPath||"")}" spellcheck="false" aria-invalid="${errText ? "true" : "false"}">${U.escapeHtml(text)}</textarea>`,
     (root)=>{
       const el = root.querySelector("textarea");
       el.addEventListener("input", e => onInput(e.target.value));
       if (onBlur) el.addEventListener("blur", () => onBlur());
     },
-    errText
+    errText,
+    fieldId
   );
 }
 
@@ -203,16 +241,18 @@ function renderJsonBox({labelZh,labelEn,docUrl,value,onInput,onBlur=null,errText
       } else if (field.type === "bool_set") {
         const setV = field.setValue;
         const checked = (curVal === setV);
+        const fieldId = genId("boolset");
         // 勾选 => 写入 setValue；取消 => 删除 key
         nodes.push(wrapField(
           fieldLabelHtml(labelZh, labelEn, docUrl),
-          `<label class="checkbox"><input type="checkbox" data-path="${U.escapeAttr(dataPath||"")}" ${checked ? "checked" : ""} /> <span>${U.escapeHtml(field.hint || "启用")}</span></label>`,
+          `<label class="checkbox"><input type="checkbox" data-path="${U.escapeAttr(dataPath||"")}" ${checked ? "checked" : ""} aria-invalid="false" /> <span>${U.escapeHtml(field.hint || "启用")}</span></label>`,
           (root)=> root.querySelector("input").addEventListener("change", (e)=>{
             if (e.target.checked) commit(setV);
             else { delete obj[key]; onChange(); }
             if (onUIRefresh) onUIRefresh();
           }),
-          errText
+          errText,
+          fieldId
         ));
       } else if (field.type === "bool") {
         nodes.push(renderBool({ labelZh, labelEn, docUrl, value: !!curVal, onChange: (v) => { commit(v); if (onUIRefresh) onUIRefresh(); }, errText, dataPath }));
