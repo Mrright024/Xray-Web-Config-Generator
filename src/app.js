@@ -65,6 +65,24 @@
     lastDownloadAction = null;
   }
 
+  // 动态同步 header 高度到 CSS 变量，避免 overlay 覆盖标题栏
+  function updateHeaderHeight() {
+    try {
+      const hdr = document.querySelector('header');
+      if (!hdr) return;
+      const h = hdr.getBoundingClientRect().height || 56;
+      document.documentElement.style.setProperty('--header-height', (Math.ceil(h) + 'px'));
+    } catch (e) { /* ignore */ }
+  }
+
+  // 初始同步与监听窗口尺寸变化
+  updateHeaderHeight();
+  window.addEventListener('resize', () => {
+    // 适度防抖
+    clearTimeout(window.__updateHeaderHeightT);
+    window.__updateHeaderHeightT = setTimeout(updateHeaderHeight, 80);
+  });
+
   elModal.addEventListener("click", (e) => {
     if (e.target?.dataset?.close) closeModal();
   });
